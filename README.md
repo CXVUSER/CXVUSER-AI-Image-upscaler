@@ -30,14 +30,14 @@ gfpgan-ncnn-vulkan.exe -i .\avatar6827912_4.jpeg -v -f -x 0,3
 Make sure submodules are initialized and updated
 
 ```console
-git clone https://github.com/onuralpszr/GFPGAN-ncnn-vulkan.git](https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml.git
+git clone https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml.git
 git submodule update --init --recursive
 ```
 
 ## Clone project with Submodules
 
 ```sh
-git clone --recursive https://github.com/onuralpszr/GFPGAN-ncnn-vulkan.git](https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml.git
+git clone --recursive https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml.git
 ```
 
 ## Project Prerequisites ⚙️
