@@ -26,8 +26,8 @@ public:
     Face();
     ~Face();
     int load(const std::string& param_path, const std::string& model_path);
-    int detect(const cv::Mat& rgb, std::vector<Object>& objects, float prob_threshold = 0.7f, float nms_threshold = 0.3f);
-    int align_warp_face(cv::Mat& img, const std::vector<Object>& objects, std::vector<cv::Mat>& trans_matrix_inv, std::vector<cv::Mat>& trans_img);
+    int detect(const cv::Mat& rgb, std::vector<Object>& objects, float prob_threshold = 0.5f, float nms_threshold = 0.3f);
+    int align_warp_face(cv::Mat& img, const std::vector<Object>& objects, std::vector<cv::Mat>& trans_matrix_inv, std::vector<cv::Mat>& trans_img, int scaleFactor = 2);
     void draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects);
 private:
     ncnn::Net net;
