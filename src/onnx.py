@@ -10,7 +10,7 @@ import onnxruntime
 
 class GFPGANFaceAugment:
     def __init__(self, model_path, use_gpu = True):
-        self.ort_session = onnxruntime.InferenceSession(model_path, providers=['DmlExecutionProvider', 'CPUExecutionProvider'])
+        self.ort_session = onnxruntime.InferenceSession(model_path, providers=['DmlExecutionProvider','CUDAExecutionProvider', 'CPUExecutionProvider'])
         self.face_size = 512
     def pre_process(self, img):
         
