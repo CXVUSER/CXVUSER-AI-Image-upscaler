@@ -1,16 +1,4 @@
-# GFPGAN-ncnn-vulkan 🚀
-
-[![Windows Dev Build](https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/actions/workflows/build_dev_windows.yml/badge.svg)](https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/actions/workflows/build_dev_windows.yml)
-[![Ubuntu Dev Build](https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/actions/workflows/build_dev_ubuntu.yml/badge.svg)](https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/actions/workflows/build_dev_ubuntu.yml)
-[![Fedora Dev Build (RPM Vulkan)](https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/actions/workflows/build_dev_fedora_rpm_vulkan.yml/badge.svg)](https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/actions/workflows/build_dev_fedora_rpm_vulkan.yml)
-[![Fedora Dev Build (Lunar Vulkan SDK)](https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/actions/workflows/build_dev_fedora_lunar_vulkan.yml/badge.svg)](https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/actions/workflows/build_dev_fedora_lunar_vulkan.yml)
-[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/onuralpszr/GFPGAN-ncnn-vulkan/main.svg)](https://results.pre-commit.ci/latest/github/onuralpszr/GFPGAN-ncnn-vulkan/main)
-![GitHub](https://img.shields.io/github/license/onuralpszr/GFPGAN-ncnn-vulkan?color=red)
-[![Open issue](https://img.shields.io/github/issues/onuralpszr/GFPGAN-ncnn-vulkan)](https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/issues)
-[![Closed issue](https://img.shields.io/github/issues-closed/onuralpszr/GFPGAN-ncnn-vulkan)](https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/issues)
-![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/onuralpszr/GFPGAN-ncnn-vulkan)
-![cpp](https://img.shields.io/badge/C++20-Project-blue.svg?style=flat&logo=c%2B%2B)
-[![Github All Releases](https://img.shields.io/github/downloads/onuralpszr/GFPGAN-ncnn-vulkan/total.svg)](https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/releases)
+# Upscayl-gfpgan-realesr-ncnn-directml 🚀
 
 Ncnn with Vulkan implementation of **GFPGAN aims at developing Practical Algorithms for Real-world Face Restoration**
 
@@ -18,19 +6,38 @@ This repository contains the code and pre-trained models for a real-world face r
 
 The goal of this project is to develop practical algorithms that can restore the appearance of damaged or low-quality face images, such as those obtained from security cameras, old photographs, or social media profiles. The proposed approach combines the power of deep learning with the speed and efficiency of hardware acceleration, making it suitable for real-time applications on smartphones, drones, or robots.
 
+### Usage tips:
+```
+-i <img> path to image
+-s <digit> scale factor (default=4)
+-t <digit> tile size (default=auto)
+-f restore faces (GFPGAN 1.4) (default=0)
+-m <string> esrgan model name (default=./models/x4nomos8ksc)
+-g <string> gfpgan model path (default=./models/gfpgan_1.4)
+-x <digit> YOLOV5 face detection threshold (default=0,5) (0.3..0.7 recommended)
+-c use gfpgan-ncnn infer instead of onnx(DirectML prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)
+-v verbose
+```
+
+# Sample:
+```Console
+gfpgan-ncnn-vulkan.exe -i .\avatar6827912_4.jpeg -v -f -x 0,3
+```
+
+### Compile:
 ## Clone Project and Get Submodules
 
 Make sure submodules are initialized and updated
 
 ```console
-git clone https://github.com/onuralpszr/GFPGAN-ncnn-vulkan.git
+git clone https://github.com/onuralpszr/GFPGAN-ncnn-vulkan.git](https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml.git
 git submodule update --init --recursive
 ```
 
 ## Clone project with Submodules
 
 ```sh
-git clone --recursive https://github.com/onuralpszr/GFPGAN-ncnn-vulkan.git
+git clone --recursive https://github.com/onuralpszr/GFPGAN-ncnn-vulkan.git](https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml.git
 ```
 
 ## Project Prerequisites ⚙️
@@ -59,13 +66,8 @@ cmake --build . --parallel $(($(nproc) - 1))
 ## :construction: Model support :construction:
 
 1. GFPGANCleanv1-NoCE-C2
-
-### TODO: :bookmark_tabs:
-
-- [x] Support ncnn-vulkan
-- [ ] Convert pth->onnx->ncnn
-- [ ] Model with colorization
-
+2. GFPGAN 1.2,1.3,1.4
+   
 ### References
 
 1. <https://github.com/xinntao/Real-ESRGAN>
@@ -80,8 +82,5 @@ cmake --build . --parallel $(($(nproc) - 1))
 10. <https://github.com/FeiGeChuanShu/GFPGAN-ncnn>
 11. <https://github.com/ultralytics/ultralytics>
 
-## Download Model files (GFPGAN-ncnn model files)
-
-### Models-v0.0.1
-
-<https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/releases/download/v0.0.1-models/GFPGAN-ncnn-models.zip>
+## Download Model files (GFPGAN-ncnn-onnx model files)
+<[https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/releases/download/v0.0.1-models/GFPGAN-ncnn-models.zip](https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml/releases/download/v0.0.1-models/models.7z)>
