@@ -83,4 +83,4 @@ cmake --build . --parallel $(($(nproc) - 1))
 11. <https://github.com/ultralytics/ultralytics>
 
 ## Download Model files (GFPGAN-ncnn-onnx model files)
-<[https://github.com/onuralpszr/GFPGAN-ncnn-vulkan/releases/download/v0.0.1-models/GFPGAN-ncnn-models.zip](https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml/releases/download/v0.0.1-models/models.7z)>
+https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml/releases/download/v0.0.1-models/models.7z
