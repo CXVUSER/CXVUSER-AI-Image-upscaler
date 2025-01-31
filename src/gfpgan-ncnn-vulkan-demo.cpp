@@ -1,7 +1,6 @@
 ﻿#include "face.h"
 #include "gfpgan.h"
 #include "realesrgan.h"
-#include "realesrgan_legacy.h"
 #include <cstdio>
 #include <iostream>
 #include <net.h>
@@ -178,14 +177,13 @@ int main(int argc, char **argv)
     bool restore_face = false;
     bool verbose = false;
     bool ncnn_gfp = false;
-    bool legacy = false;
     float prob_face_thd = 0.5f;
     float nms_face_thd = 0.3f;
 
 #if _WIN32
     setlocale(LC_ALL, "");
     wchar_t opt;
-    while ((opt = getopt(argc, argv, L"i:s:t:f:m:g:v:l:n:h:c:x")) != (wchar_t) 0) {
+    while ((opt = getopt(argc, argv, L"i:s:t:f:m:g:v:n:h:c:x")) != (wchar_t) 0) {
         switch (opt) {
             case L'i': {
                 imagepath = optarg;
@@ -201,28 +199,18 @@ int main(int argc, char **argv)
                 restore_face = true;
             } break;
             case L'm': {
-                if (false == legacy) {
-                    esr_model = optarg;
-                    wcstombs(esr_modela, esr_model.data(), _MAX_PATH);
-                }
+                esr_model = optarg;
+                wcstombs(esr_modela, esr_model.data(), _MAX_PATH);
             } break;
             case L'g': {
-                if (false == legacy) {
-                    gfp_model = optarg;
-                    wcstombs(gfp_modela, gfp_model.data(), _MAX_PATH);
-                }
+                gfp_model = optarg;
+                wcstombs(gfp_modela, gfp_model.data(), _MAX_PATH);
             } break;
             case L'v': {
                 verbose = true;
             } break;
             case L'c': {
                 ncnn_gfp = true;
-            } break;
-            case L'l': {
-                esr_model = L"./models/real_esrgan";
-                wcstombs(esr_modela, esr_model.data(), _MAX_PATH);
-                scale = 2;
-                legacy = true;
             } break;
             case L'x': {
                 prob_face_thd = _wtof(optarg);
@@ -271,12 +259,12 @@ int main(int argc, char **argv)
 
     if (true == verbose) {
         fprintf(stderr, "Input image dimensions w: %d, h: %d, c: %d...\n", w, h, c);
-        fprintf(stderr, "tilesize: %d, legacy: %d, ncnn_gfp: %d, restore_face: %d, scale: %d, upsample: %d\n"
+        fprintf(stderr, "tilesize: %d, ncnn_gfp: %d, restore_face: %d, scale: %d, upsample: %d\n"
                         " gfp_model_path: %s\n"
                         " esr_model_path: %s\n"
                         " heap_vram_budget: %d\n"
-                        " face_detect_threshold: %.5f\n",
-                tilesize, legacy, ncnn_gfp, restore_face, scale, upsample, gfp_modela, esr_modela, heap_budget, prob_face_thd);
+                        " face_detect_threshold: %.1f\n",
+                tilesize, ncnn_gfp, restore_face, scale, upsample, gfp_modela, esr_modela, heap_budget, prob_face_thd);
     }
     ncnn::Mat bg_upsamplencnn(w * scale, h * scale, (size_t) c, c);
     ncnn::Mat bg_presample(w, h, (void *) pixeldata, (size_t) c, c);
@@ -284,34 +272,23 @@ int main(int argc, char **argv)
     cv::Mat img_faces(h, w, (c == 3) ? CV_8UC3 : CV_8UC4, pixeldata);
 
     if (true == upsample) {
-        if (true == legacy) {
-            RealESRGAN_legacy real_esrgan;
-            fprintf(stderr, "Loading RealESRGAN model from /models/real_esrgan...\n");
-            real_esrgan.load("./models/real_esrgan.param", "./models/real_esrgan.bin");
-            fprintf(stderr, "Loading RealESRGAN model finished...\n");
+        RealESRGAN real_esrgan;
+        real_esrgan.scale = scale;
+        real_esrgan.prepadding = 10;
+        real_esrgan.tilesize = tilesize;
 
-            fprintf(stderr, "Upscale image...\n");
-            real_esrgan.tile_process(img_faces, bg_upsamplecv);
-            fprintf(stderr, "Upscale image finished...\n");
-        } else {
-            RealESRGAN real_esrgan;
-            real_esrgan.scale = scale;
-            real_esrgan.prepadding = 10;
-            real_esrgan.tilesize = tilesize;
+        std::wstringstream str_param;
+        str_param << esr_model.data() << ".param" << std::ends;
+        std::wstringstream str_bin;
+        str_bin << esr_model.data() << ".bin" << std::ends;
 
-            std::wstringstream str_param;
-            str_param << esr_model.data() << ".param" << std::ends;
-            std::wstringstream str_bin;
-            str_bin << esr_model.data() << ".bin" << std::ends;
+        fprintf(stderr, "Loading upscayl model from %s...\n", esr_modela);
+        real_esrgan.load(str_param.view().data(), str_bin.view().data());
+        fprintf(stderr, "Loading upscayl model finished...\n");
 
-            fprintf(stderr, "Loading upscayl model from %s...\n", esr_modela);
-            real_esrgan.load(str_param.view().data(), str_bin.view().data());
-            fprintf(stderr, "Loading upscayl model finished...\n");
-
-            fprintf(stderr, "Upscale image...\n");
-            real_esrgan.process(bg_presample, bg_upsamplencnn);
-            fprintf(stderr, "Upscale image finished...\n");
-        }
+        fprintf(stderr, "Upscale image...\n");
+        real_esrgan.process(bg_presample, bg_upsamplencnn);
+        fprintf(stderr, "Upscale image finished...\n");
     }
     std::vector<cv::Mat> trans_img;
     std::vector<cv::Mat> trans_matrix_inv;
@@ -320,16 +297,10 @@ int main(int argc, char **argv)
     std::wstringstream str;
     str << imagepath << L"_" << getfilew(esr_model.data()) << L"_s" << scale << ".png" << std::ends;
 
-    if (false == legacy) {
 #if _WIN32
-        wic_encode_image(str.view().data(), bg_upsamplencnn.w, bg_upsamplencnn.h, bg_upsamplencnn.elempack, bg_upsamplencnn.data);
+    wic_encode_image(str.view().data(), bg_upsamplencnn.w, bg_upsamplencnn.h, bg_upsamplencnn.elempack, bg_upsamplencnn.data);
 #else
 #endif
-    } else {
-        char stra[_MAX_PATH];
-        wcstombs(stra, str.view().data(), _MAX_PATH);
-        cv::imwrite(stra, bg_upsamplecv);
-    }
 
     if (true == restore_face) {
         char path[_MAX_PATH];
