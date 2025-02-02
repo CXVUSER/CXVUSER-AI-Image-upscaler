@@ -53,6 +53,7 @@ static void print_usage() {
     fprintf(stderr, " -g <string> gfpgan model path (default=./models/gfpgan_1.4)\n");
     fprintf(stderr, " -x <digit> YOLOV5 face detection threshold (default=0,5) (0.3..0.7 recommended)\n");
     fprintf(stderr, " -c use gfpgan-ncnn infer instead of onnx(DirectML prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)\n");
+    fprintf(stderr, " -n no upsample\n");
     fprintf(stderr, " -v verbose\n");
 };
 
@@ -160,7 +161,6 @@ int wmain(int argc, wchar_t **argv)
 int main(int argc, char **argv)
 #endif
 {
-    const float norm_vals[3] = {1 / 255.0f, 1 / 255.0f, 1 / 255.0f};
     std::wstring imagepath;
     char imagepatha[_MAX_PATH];
 
@@ -215,6 +215,9 @@ int main(int argc, char **argv)
             case L'x': {
                 prob_face_thd = _wtof(optarg);
             } break;
+            case L'n': {
+                upsample = false;
+            } break;
             case L'h': {
                 print_usage();
                 return 0;
@@ -226,6 +229,11 @@ int main(int argc, char **argv)
         }
     }
 #endif
+
+    if (false == upsample && false == restore_face) {
+        print_usage();
+        return 0;
+    }
 
     unsigned char *pixeldata = 0;
     int w{}, h{}, c{};
@@ -271,7 +279,13 @@ int main(int argc, char **argv)
     cv::Mat bg_upsamplecv;
     cv::Mat img_faces(h, w, (c == 3) ? CV_8UC3 : CV_8UC4, pixeldata);
 
-    if (true == upsample) {
+    std::vector<cv::Mat> trans_img;
+    std::vector<cv::Mat> trans_matrix_inv;
+    std::vector<Object> objects;
+
+    std::wstringstream str;
+
+    if (upsample) {
         RealESRGAN real_esrgan;
         real_esrgan.scale = scale;
         real_esrgan.prepadding = 10;
@@ -289,18 +303,15 @@ int main(int argc, char **argv)
         fprintf(stderr, "Upscale image...\n");
         real_esrgan.process(bg_presample, bg_upsamplencnn);
         fprintf(stderr, "Upscale image finished...\n");
+
+        str << imagepath << L"_" << getfilew(esr_model.data()) << L"_s" << scale << ".png" << std::ends;
+        wic_encode_image(str.view().data(), bg_upsamplencnn.w, bg_upsamplencnn.h, bg_upsamplencnn.elempack, bg_upsamplencnn.data);
+    } else {
+        cv::resize(img_faces, bg_upsamplecv, cv::Size(img_faces.cols * scale, img_faces.rows * scale), 0, 0, cv::InterpolationFlags::INTER_CUBIC);
+        str << imagepath << L"_" << getfilew(gfp_model.data()) << L"_s" << scale << "_interpolated"
+            << ".png" << std::ends;
+        wic_encode_image(str.view().data(), bg_upsamplecv.cols, bg_upsamplecv.rows, bg_upsamplecv.elemSize(), bg_upsamplecv.data);
     }
-    std::vector<cv::Mat> trans_img;
-    std::vector<cv::Mat> trans_matrix_inv;
-    std::vector<Object> objects;
-
-    std::wstringstream str;
-    str << imagepath << L"_" << getfilew(esr_model.data()) << L"_s" << scale << ".png" << std::ends;
-
-#if _WIN32
-    wic_encode_image(str.view().data(), bg_upsamplencnn.w, bg_upsamplencnn.h, bg_upsamplencnn.elempack, bg_upsamplencnn.data);
-#else
-#endif
 
     if (true == restore_face) {
         char path[_MAX_PATH];
@@ -323,10 +334,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "Loading GFPGAN model finished...\n");
         }
 
-        if (true == upsample) {
-            face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, scale);
-        } else
-            face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, 0);
+        face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, scale);
 
         int n_f{};
         for (auto &x: trans_img) {
@@ -342,6 +350,9 @@ int main(int argc, char **argv)
                 system(str2.view().data());
 
                 cv::Mat restored_face = cv::imread("output.jpg", 1);
+                std::stringstream str3;
+                str3 << imagepatha << "_" << n_f << "_crop_" << getfilea(gfp_modela) << "_upsampled.png" << std::ends;
+                cv::imwrite(str3.view().data(), restored_face);
                 fprintf(stderr, "paste face %d into image...\n", n_f + 1);
                 paste_faces_to_input_image(restored_face, trans_matrix_inv[n_f], img_faces_upsamle);
             } else {
@@ -358,16 +369,23 @@ int main(int argc, char **argv)
         }
 
         std::stringstream file;
-        file << imagepatha << "_" << getfilea(esr_modela);
-        file << "_" << getfilea(gfp_modela);
+        file << imagepatha;
         if (upsample)
-            file << "_s" << scale << ".png" << std::ends;
+            file << "_" << getfilea(esr_modela);
+        if (restore_face)
+            file << "_" << getfilea(gfp_modela);
+        file << "_s" << scale;
+
+        file << ".png" << std::ends;
 
         cv::imwrite(file.view().data(), img_faces_upsamle);
     }
 #if _WIN32
     CoUninitialize();
 #endif
+
+    ncnn::destroy_gpu_instance();
+
     fprintf(stderr, "Finish enjoy...\n");
 
     return 0;
