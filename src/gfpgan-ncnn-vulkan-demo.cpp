@@ -307,7 +307,10 @@ int main(int argc, char **argv)
         str << imagepath << L"_" << getfilew(esr_model.data()) << L"_s" << scale << ".png" << std::ends;
         wic_encode_image(str.view().data(), bg_upsamplencnn.w, bg_upsamplencnn.h, bg_upsamplencnn.elempack, bg_upsamplencnn.data);
     } else {
-        cv::resize(img_faces, bg_upsamplecv, cv::Size(img_faces.cols * scale, img_faces.rows * scale), 0, 0, cv::InterpolationFlags::INTER_CUBIC);
+        if (scale)
+            cv::resize(img_faces, bg_upsamplecv, cv::Size(img_faces.cols * scale, img_faces.rows * scale), 0, 0, cv::InterpolationFlags::INTER_CUBIC);
+        else
+            img_faces.copyTo(bg_upsamplecv);
         str << imagepath << L"_" << getfilew(gfp_model.data()) << L"_s" << scale << "_interpolated"
             << ".png" << std::ends;
         wic_encode_image(str.view().data(), bg_upsamplecv.cols, bg_upsamplecv.rows, bg_upsamplecv.elemSize(), bg_upsamplecv.data);
