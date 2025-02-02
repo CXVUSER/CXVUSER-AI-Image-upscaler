@@ -8,18 +8,21 @@ The goal of this project is to develop practical algorithms that can restore the
 
 ### Usage tips:
 ```
--i <img> path to image
--s <digit> scale factor (default=4)
--t <digit> tile size (default=auto)
--f restore faces (GFPGAN 1.4) (default=0)
--m <string> esrgan model name (default=./models/x4nomos8ksc)
--g <string> gfpgan model path (default=./models/gfpgan_1.4)
--x <digit> YOLOV5 face detection threshold (default=0,5) (0.3..0.7 recommended)
--c use gfpgan-ncnn infer instead of onnx(DirectML prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)
--v verbose
+Usage: this_binary [options]...
+
+ -i <img> path to image
+ -s <digit> scale factor (default=4)
+ -t <digit> tile size (default=auto)
+ -f restore faces (GFPGAN 1.4) (default=0)
+ -m <string> esrgan model name (default=./models/x4nomos8ksc)
+ -g <string> gfpgan model path (default=./models/gfpgan_1.4)
+ -x <digit> YOLOV5 face detection threshold (default=0,5) (0.3..0.7 recommended)
+ -c use gfpgan-ncnn infer instead of onnx(DirectML or CUDA prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)
+ -n no upsample
+ -v verbose
 ```
 
-# Sample:
+### Sample:
 ```Console
 gfpgan-ncnn-vulkan.exe -i .\avatar6827912_4.jpeg -v -f -x 0,3
 ```
@@ -67,6 +70,7 @@ cmake --build . --parallel $(($(nproc) - 1))
 
 1. GFPGANCleanv1-NoCE-C2
 2. GFPGAN 1.2,1.3,1.4
+3. ncnn esrgan models
    
 ### References
 
@@ -82,5 +86,5 @@ cmake --build . --parallel $(($(nproc) - 1))
 10. <https://github.com/FeiGeChuanShu/GFPGAN-ncnn>
 11. <https://github.com/ultralytics/ultralytics>
 
-## Download Model files (GFPGAN-ncnn-onnx model files)
+## Download Model files (GFPGAN-ESRGAN-ncnn-onnx model files)
 https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml/releases/download/v0.0.1-models/models.7z
