@@ -1,5 +1,6 @@
 ﻿#include "face.h"
 #include "gfpgan.h"
+#include "pipeline.h"
 #include "realesrgan.h"
 #include <cstdio>
 #include <iostream>
@@ -51,8 +52,9 @@ static void print_usage() {
     fprintf(stderr, " -f restore faces (GFPGAN 1.4) (default=0)\n");
     fprintf(stderr, " -m <string> esrgan model name (default=./models/x4nomos8ksc)\n");
     fprintf(stderr, " -g <string> gfpgan model path (default=./models/gfpgan_1.4)\n");
-    fprintf(stderr, " -x <digit> YOLOV5 face detection threshold (default=0,5) (0.3..0.7 recommended)\n");
-    fprintf(stderr, " -c use gfpgan-ncnn infer instead of onnx(DirectML prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)\n");
+    fprintf(stderr, " -x <digit> YOLOV face detection threshold (default=0,5) (0.3..0.7 recommended)\n");
+    fprintf(stderr, " -c use CodeFormer ncnn\n");
+    fprintf(stderr, " -p use gfpgan-ncnn infer instead of onnx(DirectML prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)\n");
     fprintf(stderr, " -n no upsample\n");
     fprintf(stderr, " -v verbose\n");
 };
@@ -79,15 +81,14 @@ static void paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &tr
 
     cv::Mat inv_restored;
     cv::warpAffine(restored_face, inv_restored, trans_matrix_inv, bg_upsample.size(), 1, 0);
-    cv::Mat mask = cv::Mat::ones(cv::Size(512, 512), CV_8UC1) * 255;
 
+    cv::Mat mask = cv::Mat::ones(cv::Size(512, 512), CV_8UC1) * 255;
     cv::Mat inv_mask;
     cv::warpAffine(mask, inv_mask, trans_matrix_inv, bg_upsample.size(), 1, 0);
 
     cv::Mat inv_mask_erosion;
     cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(4, 4));
     cv::erode(inv_mask, inv_mask_erosion, kernel);
-
     cv::Mat pasted_face;
     cv::bitwise_and(inv_restored, inv_restored, pasted_face, inv_mask_erosion);
 
@@ -95,7 +96,6 @@ static void paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &tr
     int w_edge = int(std::sqrt(total_face_area) / 20);
     int erosion_radius = w_edge * 2;
     cv::Mat inv_mask_center;
-
     kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(erosion_radius, erosion_radius));
     cv::erode(inv_mask_erosion, inv_mask_center, kernel);
 
@@ -103,18 +103,21 @@ static void paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &tr
     cv::Mat inv_soft_mask;
     cv::GaussianBlur(inv_mask_center, inv_soft_mask, cv::Size(blur_size + 1, blur_size + 1), 0, 0, 4);
 
-    for (int h = 0; h < bg_upsample.rows; h++) {
-        for (int w = 0; w < bg_upsample.cols; w++) {
-            float alpha = inv_soft_mask.at<uchar>(h, w) / 255.0;
-            bg_upsample.at<cv::Vec3b>(h, w)[0] =
-                    pasted_face.at<cv::Vec3b>(h, w)[0] * alpha + (1 - alpha) * bg_upsample.at<cv::Vec3b>(h, w)[0];
-            bg_upsample.at<cv::Vec3b>(h, w)[1] =
-                    pasted_face.at<cv::Vec3b>(h, w)[1] * alpha + (1 - alpha) * bg_upsample.at<cv::Vec3b>(h, w)[1];
-            bg_upsample.at<cv::Vec3b>(h, w)[2] =
-                    pasted_face.at<cv::Vec3b>(h, w)[2] * alpha + (1 - alpha) * bg_upsample.at<cv::Vec3b>(h, w)[2];
+    cv::Mat inv_soft_mask_f;
+    inv_soft_mask.convertTo(inv_soft_mask_f, CV_32F, 1 / 255.f, 0.f);
+
+#pragma omp parallel for
+    for (int h = 0; h < bg_upsample.rows; ++h) {
+        cv::Vec3b *img_ptr = bg_upsample.ptr<cv::Vec3b>(h);
+        cv::Vec3b *face_ptr = pasted_face.ptr<cv::Vec3b>(h);
+        float *mask_ptr = inv_soft_mask_f.ptr<float>(h);
+        for (int w = 0; w < bg_upsample.cols; ++w) {
+            img_ptr[w][0] = img_ptr[w][0] * (1 - mask_ptr[w]) + face_ptr[w][0] * mask_ptr[w];
+            img_ptr[w][1] = img_ptr[w][1] * (1 - mask_ptr[w]) + face_ptr[w][1] * mask_ptr[w];
+            img_ptr[w][2] = img_ptr[w][2] * (1 - mask_ptr[w]) + face_ptr[w][2] * mask_ptr[w];
         }
     }
-};
+}
 
 bool pathisfolderw(wchar_t *c) {
     if (c) {
@@ -165,8 +168,8 @@ int main(int argc, char **argv)
     char imagepatha[_MAX_PATH];
 
     //default selected models
-    std::wstring esr_model = L"./models/x4nomos8ksc";
-    char esr_modela[_MAX_PATH] = "./models/x4nomos8ksc";
+    std::wstring esr_model = L"./models/4xNomos8kSC";
+    char esr_modela[_MAX_PATH] = "./models/4xNomos8kSC";
     std::wstring gfp_model = L"./models/gfpgan_1.4";
     char gfp_modela[_MAX_PATH] = "./models/gfpgan_1.4";
 
@@ -177,13 +180,14 @@ int main(int argc, char **argv)
     bool restore_face = false;
     bool verbose = false;
     bool ncnn_gfp = false;
+    bool use_codeformer = false;
     float prob_face_thd = 0.5f;
     float nms_face_thd = 0.3f;
 
 #if _WIN32
     setlocale(LC_ALL, "");
     wchar_t opt;
-    while ((opt = getopt(argc, argv, L"i:s:t:f:m:g:v:n:h:c:x")) != (wchar_t) 0) {
+    while ((opt = getopt(argc, argv, L"i:s:t:f:p:m:g:v:n:h:c:x")) != (wchar_t) 0) {
         switch (opt) {
             case L'i': {
                 imagepath = optarg;
@@ -209,8 +213,11 @@ int main(int argc, char **argv)
             case L'v': {
                 verbose = true;
             } break;
-            case L'c': {
+            case L'p': {
                 ncnn_gfp = true;
+            } break;
+            case L'c': {
+                use_codeformer = true;
             } break;
             case L'x': {
                 prob_face_thd = _wtof(optarg);
@@ -267,12 +274,12 @@ int main(int argc, char **argv)
 
     if (true == verbose) {
         fprintf(stderr, "Input image dimensions w: %d, h: %d, c: %d...\n", w, h, c);
-        fprintf(stderr, "tilesize: %d, ncnn_gfp: %d, restore_face: %d, scale: %d, upsample: %d\n"
+        fprintf(stderr, "tilesize: %d, ncnn_gfp: %d, restore_face: %d, scale: %d, upsample: %d, use_codeformer: %d\n"
                         " gfp_model_path: %s\n"
                         " esr_model_path: %s\n"
                         " heap_vram_budget: %d\n"
                         " face_detect_threshold: %.1f\n",
-                tilesize, ncnn_gfp, restore_face, scale, upsample, gfp_modela, esr_modela, heap_budget, prob_face_thd);
+                tilesize, ncnn_gfp, restore_face, scale, upsample, use_codeformer, gfp_modela, esr_modela, heap_budget, prob_face_thd);
     }
     ncnn::Mat bg_upsamplencnn(w * scale, h * scale, (size_t) c, c);
     ncnn::Mat bg_presample(w, h, (void *) pixeldata, (size_t) c, c);
@@ -321,64 +328,79 @@ int main(int argc, char **argv)
         wcstombs(path, str.view().data(), _MAX_PATH);
         cv::Mat img_faces_upsamle = cv::imread(path, 1);
 
-        Face face_detector;
-        fprintf(stderr, "Loading YOLOV5 face detector model from /models/yolov5-blazeface...\n");
-        face_detector.load("./models/yolov5-blazeface.param", "./models/yolov5-blazeface.bin");
-        fprintf(stderr, "Loading YOLOV5 face detector model finished...\n");
+        if (use_codeformer) {
+            wsdsb::PipelineConfig_t pipeline_config_t;
+            pipeline_config_t.model_path = "./models/";
 
-        fprintf(stderr, "Detecting faces...\n");
-        face_detector.detect(img_faces, objects, prob_face_thd, nms_face_thd);
-        fprintf(stderr, "Detected %d faces\n", objects.size());
-        GFPGAN gfpgan;//GFPGANCleanv1-NoCE-C2
+            wsdsb::PipeLine pipe(scale);
+            pipe.CreatePipeLine(pipeline_config_t);
 
-        if (true == ncnn_gfp) {
-            fprintf(stderr, "Loading GFPGANv1 face detector model from /models/GFPGANCleanv1-NoCE-C2-*...\n");
-            gfpgan.load("./models/GFPGANCleanv1-NoCE-C2-encoder.param", "./models/GFPGANCleanv1-NoCE-C2-encoder.bin", "./models/GFPGANCleanv1-NoCE-C2-style.bin");
-            fprintf(stderr, "Loading GFPGAN model finished...\n");
-        }
+            cv::Mat up = cv::imread(path, 1);
+            pipe.Apply(img_faces, img_faces_upsamle);
+        } else {
+            Face face_detector;
+            fprintf(stderr, "Loading YOLOV5 face detector model from /models/yolov5-blazeface...\n");
+            face_detector.load("./models/yolov5-blazeface.param", "./models/yolov5-blazeface.bin");
+            fprintf(stderr, "Loading YOLOV5 face detector model finished...\n");
 
-        face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, scale);
+            fprintf(stderr, "Detecting faces...\n");
+            face_detector.detect(img_faces, objects, prob_face_thd, nms_face_thd);
+            fprintf(stderr, "Detected %d faces\n", objects.size());
+            GFPGAN gfpgan;//GFPGANCleanv1-NoCE-C2
 
-        int n_f{};
-        for (auto &x: trans_img) {
-            if (false == ncnn_gfp) {
-                std::stringstream str;
-                str << imagepatha << "_" << n_f << "_crop.png" << std::ends;
-                cv::imwrite(str.view().data(), x);
-
-                fprintf(stderr, "Processing face %d...\n", n_f + 1);
-                std::stringstream str2;
-                str2 << "python onnx.py --model_path " << gfp_modela << ".onnx"
-                     << " --image_path " << str.view() << std::ends;
-                system(str2.view().data());
-
-                cv::Mat restored_face = cv::imread("output.jpg", 1);
-                std::stringstream str3;
-                str3 << imagepatha << "_" << n_f << "_crop_" << getfilea(gfp_modela) << "_upsampled.png" << std::ends;
-                cv::imwrite(str3.view().data(), restored_face);
-                fprintf(stderr, "paste face %d into image...\n", n_f + 1);
-                paste_faces_to_input_image(restored_face, trans_matrix_inv[n_f], img_faces_upsamle);
-            } else {
-                ncnn::Mat gfpgan_result;
-                fprintf(stderr, "Processing face %d...\n", n_f + 1);
-                gfpgan.process(trans_img[n_f], gfpgan_result);
-
-                cv::Mat restored_face;
-                to_ocv(gfpgan_result, restored_face);
-                fprintf(stderr, "paste face %d into image...\n", n_f + 1);
-                paste_faces_to_input_image(restored_face, trans_matrix_inv[n_f], img_faces_upsamle);
+            if (true == ncnn_gfp) {
+                fprintf(stderr, "Loading GFPGANv1 face detector model from /models/GFPGANCleanv1-NoCE-C2-*...\n");
+                gfpgan.load("./models/GFPGANCleanv1-NoCE-C2-encoder.param", "./models/GFPGANCleanv1-NoCE-C2-encoder.bin", "./models/GFPGANCleanv1-NoCE-C2-style.bin");
+                fprintf(stderr, "Loading GFPGAN model finished...\n");
             }
-            ++n_f;
-        }
 
+            face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, scale);
+
+            int n_f{};
+            for (auto &x: trans_img) {
+                if (false == ncnn_gfp) {
+                    std::stringstream str;
+                    str << imagepatha << "_" << n_f << "_crop.png" << std::ends;
+                    cv::imwrite(str.view().data(), x);
+
+                    fprintf(stderr, "Processing face %d...\n", n_f + 1);
+                    std::stringstream str2;
+                    str2 << "python onnx.py --model_path " << gfp_modela << ".onnx"
+                         << " --image_path " << str.view() << std::ends;
+                    system(str2.view().data());
+
+                    cv::Mat restored_face = cv::imread("output.jpg", 1);
+                    std::stringstream str3;
+                    str3 << imagepatha << "_" << n_f << "_crop_" << getfilea(gfp_modela) << "_upsampled.png" << std::ends;
+                    cv::imwrite(str3.view().data(), restored_face);
+                    fprintf(stderr, "paste face %d into image...\n", n_f + 1);
+                    paste_faces_to_input_image(restored_face, trans_matrix_inv[n_f], img_faces_upsamle);
+                } else {
+                    ncnn::Mat gfpgan_result;
+                    fprintf(stderr, "Processing face %d...\n", n_f + 1);
+                    gfpgan.process(trans_img[n_f], gfpgan_result);
+
+                    cv::Mat restored_face;
+                    to_ocv(gfpgan_result, restored_face);
+                    fprintf(stderr, "paste face %d into image...\n", n_f + 1);
+                    paste_faces_to_input_image(restored_face, trans_matrix_inv[n_f], img_faces_upsamle);
+                }
+                ++n_f;
+            }
+        }
         std::stringstream file;
         file << imagepatha;
         if (upsample)
             file << "_" << getfilea(esr_modela);
-        if (restore_face)
-            file << "_" << getfilea(gfp_modela);
-        file << "_s" << scale;
+        if (restore_face) {
+            if (use_codeformer) {
+                file << "_codeformer";
+            } else {
+                file << "_" << getfilea(gfp_modela);
+            }
+        }
 
+        file << "_s" << scale;
         file << ".png" << std::ends;
 
         cv::imwrite(file.view().data(), img_faces_upsamle);
