@@ -6,6 +6,13 @@ This repository contains the code and pre-trained models for a real-world face r
 
 The goal of this project is to develop practical algorithms that can restore the appearance of damaged or low-quality face images, such as those obtained from security cameras, old photographs, or social media profiles. The proposed approach combines the power of deep learning with the speed and efficiency of hardware acceleration, making it suitable for real-time applications on smartphones, drones, or robots.
 
+## :construction: Model support :construction:
+
+1. GFPGANCleanv1-NoCE-C2
+2. GFPGAN 1.2,1.3,1.4
+3. ncnn esrgan models
+4. CodeFormer
+
 ### Usage tips:
 ```
 Usage: this_binary [options]...
@@ -65,12 +72,6 @@ mkdir -p build && cd build
 cmake ..
 cmake --build . --parallel $(($(nproc) - 1))
 ```
-
-## :construction: Model support :construction:
-
-1. GFPGANCleanv1-NoCE-C2
-2. GFPGAN 1.2,1.3,1.4
-3. ncnn esrgan models
    
 ### References
 
