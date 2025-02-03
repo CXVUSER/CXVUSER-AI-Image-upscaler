@@ -11,6 +11,9 @@ typedef struct _PipelineConfig {
     float w = 0.7;
     std::string model_path;
     int scale = 0;
+    bool ncnn = true;
+    bool onnx = false;
+    char name[_MAX_PATH];
 }PipelineConfig_t;
 
 class PipeLine

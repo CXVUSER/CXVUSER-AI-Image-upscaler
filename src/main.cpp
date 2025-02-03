@@ -53,7 +53,9 @@ static void print_usage() {
     fprintf(stderr, " -m <string> esrgan model name (default=./models/x4nomos8ksc)\n");
     fprintf(stderr, " -g <string> gfpgan model path (default=./models/gfpgan_1.4)\n");
     fprintf(stderr, " -x <digit> YOLOV face detection threshold (default=0,5) (0.3..0.7 recommended)\n");
-    fprintf(stderr, " -c use CodeFormer ncnn\n");
+    fprintf(stderr, " -c use CodeFormer face restore model\n");
+    fprintf(stderr, " -d swith CodeFormer infer to onnx\n");
+    fprintf(stderr, " -w CodeFormer Fidelity\n");
     fprintf(stderr, " -p use gfpgan-ncnn infer instead of onnx(DirectML prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)\n");
     fprintf(stderr, " -n no upsample\n");
     fprintf(stderr, " -v verbose\n");
@@ -181,13 +183,15 @@ int main(int argc, char **argv)
     bool verbose = false;
     bool ncnn_gfp = false;
     bool use_codeformer = false;
+    bool use_codeformer_onnx = false;
+    float codeformer_fidelity = 0.7;
     float prob_face_thd = 0.5f;
     float nms_face_thd = 0.3f;
 
 #if _WIN32
     setlocale(LC_ALL, "");
     wchar_t opt;
-    while ((opt = getopt(argc, argv, L"i:s:t:f:p:m:g:v:n:h:c:x")) != (wchar_t) 0) {
+    while ((opt = getopt(argc, argv, L"i:s:t:f:p:m:g:v:n:h:c:x:w:d")) != (wchar_t) 0) {
         switch (opt) {
             case L'i': {
                 imagepath = optarg;
@@ -218,6 +222,12 @@ int main(int argc, char **argv)
             } break;
             case L'c': {
                 use_codeformer = true;
+            } break;
+            case L'd': {
+                use_codeformer_onnx = true;
+            } break;
+            case L'w': {
+                codeformer_fidelity = _wtof(optarg);
             } break;
             case L'x': {
                 prob_face_thd = _wtof(optarg);
@@ -331,11 +341,16 @@ int main(int argc, char **argv)
         if (use_codeformer) {
             wsdsb::PipelineConfig_t pipeline_config_t;
             pipeline_config_t.model_path = "./models/";
-
+            if (use_codeformer_onnx) {
+                pipeline_config_t.onnx = true;
+                pipeline_config_t.ncnn = false;
+                pipeline_config_t.scale = scale;
+                pipeline_config_t.w = codeformer_fidelity;
+                strcpy_s(pipeline_config_t.name, 255, imagepatha);
+            }
+            
             wsdsb::PipeLine pipe(scale);
             pipe.CreatePipeLine(pipeline_config_t);
-
-            cv::Mat up = cv::imread(path, 1);
             pipe.Apply(img_faces, img_faces_upsamle);
         } else {
             Face face_detector;
@@ -365,7 +380,7 @@ int main(int argc, char **argv)
 
                     fprintf(stderr, "Processing face %d...\n", n_f + 1);
                     std::stringstream str2;
-                    str2 << "python onnx.py --model_path " << gfp_modela << ".onnx"
+                    str2 << "python gfpgan_onnx.py --model_path " << gfp_modela << ".onnx"
                          << " --image_path " << str.view() << std::ends;
                     system(str2.view().data());
 
@@ -395,6 +410,8 @@ int main(int argc, char **argv)
         if (restore_face) {
             if (use_codeformer) {
                 file << "_codeformer";
+                if (use_codeformer_onnx)
+                    file << "_" << codeformer_fidelity;
             } else {
                 file << "_" << getfilea(gfp_modela);
             }

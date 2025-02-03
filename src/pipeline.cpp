@@ -57,26 +57,53 @@ namespace wsdsb {
 
     int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
         pipeline_config_ = pipeline_config;
-        int ret = codeformer_->Load(pipeline_config_.model_path);
-        if (ret < 0) {
-            return -1;
+        if (false == pipeline_config.onnx) {
+            int ret = codeformer_->Load(pipeline_config_.model_path);
+            if (ret < 0) {
+                return -1;
+            }
         }
-        ret = face_detector_->Load(pipeline_config.model_path);
+        int ret = face_detector_->Load(pipeline_config.model_path);
         if (ret < 0) {
             return -1;
         }
 
         return 0;
     }
-    int PipeLine::Apply(const cv::Mat &preinput_img, cv::Mat &output_img) {
+    int PipeLine::Apply(const cv::Mat &input_img, cv::Mat &output_img) {
         PipeResult_t pipe_result;
-        fprintf(stderr, "Face detect pocess...\n");
-        face_detector_->Process(preinput_img, (void *) &pipe_result);
+        fprintf(stderr, "Detecting faces...\n");
+        face_detector_->Process(input_img, (void *) &pipe_result);
+        fprintf(stderr, "Detected %d faces\n", pipe_result.face_count);
 
         for (int i = 0; i != pipe_result.face_count; ++i) {
             fprintf(stderr, "Codeformer process...\n");
-            codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
-            paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img);
+            //codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
+            if (pipeline_config_.onnx) {
+                char d[_MAX_PATH];
+                sprintf(d, "%.1f", pipeline_config_.w);
+                *strrchr(d, ',') = '.';
+
+                std::stringstream str;
+                str << pipeline_config_.name << "_" << i + 1 << "_crop.png" << std::ends;
+                cv::imwrite(str.view().data(), pipe_result.object[i].trans_img);
+                std::stringstream str3;
+                str3 << pipeline_config_.name << "_" << i + 1 << "_" << pipeline_config_.w << "_codeformer_crop.png" << std::ends;
+
+                std::stringstream str2;
+                str2 << "python codeformer_onnx.py --model_path "
+                     << "./codeformer.onnx"
+                     << " --image_path " << str.view().data() << " --w " << d << std::ends;
+                system(str2.view().data());
+
+                cv::Mat restored_face = cv::imread("output.jpg", 1);
+                cv::imwrite(str3.view().data(), restored_face);
+                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img);
+            }
+            if (pipeline_config_.ncnn) {
+                codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
+                paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img);
+            }
         }
 
         return 0;
