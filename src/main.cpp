@@ -434,9 +434,9 @@ int main(int argc, char **argv)
             }
 
             if (custom_scale)
-                face_detector.align_warp_face(img_faces_upsamle, objects, trans_matrix_inv, trans_img, custom_scale);
+                face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, custom_scale);
 
-            face_detector.align_warp_face(img_faces_upsamle, objects, trans_matrix_inv, trans_img, model_scale);
+            face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, model_scale);
             int n_f{};
             for (auto &x: trans_img) {
                 if (false == ncnn_gfp) {
