@@ -47,7 +47,8 @@ static void print_usage() {
     fprintf(stderr, "This project uses (onnx,ncnn inference) with Vulkan and DirectML compute...\n");
     fprintf(stderr, "Usage: this_binary [options]...\n\n");
     fprintf(stderr, " -i <img> path to image\n");
-    fprintf(stderr, " -s <digit> scale factor (default=4)\n");
+    fprintf(stderr, " -s <digit> model scale factor (default=4)\n");
+    fprintf(stderr, " -j <digit> custom output scale factor\n");
     fprintf(stderr, " -t <digit> tile size (default=auto)\n");
     fprintf(stderr, " -f restore faces (GFPGAN 1.4) (default=0)\n");
     fprintf(stderr, " -m <string> esrgan model name (default=./models/x4nomos8ksc)\n");
@@ -55,7 +56,8 @@ static void print_usage() {
     fprintf(stderr, " -x <digit> YOLOV face detection threshold (default=0,5) (0.3..0.7 recommended)\n");
     fprintf(stderr, " -c use CodeFormer face restore model\n");
     fprintf(stderr, " -d swith CodeFormer infer to onnx\n");
-    fprintf(stderr, " -w CodeFormer Fidelity\n");
+    fprintf(stderr, " -w CodeFormer Fidelity (Only onnx) (default=0.7)\n");
+    fprintf(stderr, " -u CodeFormer FaceUpsample\n");
     fprintf(stderr, " -p use gfpgan-ncnn infer instead of onnx(DirectML prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)\n");
     fprintf(stderr, " -n no upsample\n");
     fprintf(stderr, " -v verbose\n");
@@ -177,7 +179,8 @@ int main(int argc, char **argv)
 
     //default processing params
     bool upsample = true;
-    int scale = 4;
+    int model_scale = 0;
+    int custom_scale = 0;
     int tilesize = 20;
     bool restore_face = false;
     bool verbose = false;
@@ -185,20 +188,21 @@ int main(int argc, char **argv)
     bool use_codeformer = false;
     bool use_codeformer_onnx = false;
     float codeformer_fidelity = 0.7;
+    bool codeformer_fc_up = false;
     float prob_face_thd = 0.5f;
-    float nms_face_thd = 0.3f;
+    float nms_face_thd = 0.65f;
 
 #if _WIN32
     setlocale(LC_ALL, "");
     wchar_t opt;
-    while ((opt = getopt(argc, argv, L"i:s:t:f:p:m:g:v:n:h:c:x:w:d")) != (wchar_t) 0) {
+    while ((opt = getopt(argc, argv, L"i:s:t:j:f:p:m:g:v:n:h:c:x:w:d:u")) != (wchar_t) 0) {
         switch (opt) {
             case L'i': {
                 imagepath = optarg;
                 wcstombs(imagepatha, imagepath.data(), _MAX_PATH);
             } break;
             case L's': {
-                scale = _wtoi(optarg);
+                model_scale = _wtoi(optarg);
             } break;
             case L't': {
                 tilesize = _wtoi(optarg);
@@ -234,6 +238,12 @@ int main(int argc, char **argv)
             } break;
             case L'n': {
                 upsample = false;
+            } break;
+            case L'u': {
+                codeformer_fc_up = true;
+            } break;
+            case L'j': {
+                custom_scale = _wtoi(optarg);
             } break;
             case L'h': {
                 print_usage();
@@ -282,16 +292,37 @@ int main(int argc, char **argv)
 #else
 #endif
 
+    if (upsample)
+        if (!model_scale) {
+            if (esr_model.find(L"1x", 0) != std::string::npos || esr_model.find(L"x1", 0) != std::string::npos)
+                model_scale = 1;
+            if (esr_model.find(L"2x", 0) != std::string::npos || esr_model.find(L"x2", 0) != std::string::npos)
+                model_scale = 2;
+            if (esr_model.find(L"3x", 0) != std::string::npos || esr_model.find(L"x3", 0) != std::string::npos)
+                model_scale = 3;
+            if (esr_model.find(L"4x", 0) != std::string::npos || esr_model.find(L"x4", 0) != std::string::npos)
+                model_scale = 4;
+            if (esr_model.find(L"5x", 0) != std::string::npos || esr_model.find(L"x5", 0) != std::string::npos)
+                model_scale = 5;
+            if (esr_model.find(L"8x", 0) != std::string::npos || esr_model.find(L"x8", 0) != std::string::npos)
+                model_scale = 8;
+            if (esr_model.find(L"16x", 0) != std::string::npos || esr_model.find(L"x16", 0) != std::string::npos)
+                model_scale = 16;
+        }
+
     if (true == verbose) {
         fprintf(stderr, "Input image dimensions w: %d, h: %d, c: %d...\n", w, h, c);
-        fprintf(stderr, "tilesize: %d, ncnn_gfp: %d, restore_face: %d, scale: %d, upsample: %d, use_codeformer: %d\n"
+        fprintf(stderr, "tilesize: %d, ncnn_gfp: %d, onnx_cdf: %d, restore_face: %d, model_scale: %d, upsample: %d, use_codeformer: %d\n"
                         " gfp_model_path: %s\n"
                         " esr_model_path: %s\n"
                         " heap_vram_budget: %d\n"
+                        " custom_scale: %d\n"
+                        " codeformer face upsample: %d\n"
+                        " codeformer fidelity: %.1f\n"
                         " face_detect_threshold: %.1f\n",
-                tilesize, ncnn_gfp, restore_face, scale, upsample, use_codeformer, gfp_modela, esr_modela, heap_budget, prob_face_thd);
+                tilesize, ncnn_gfp, use_codeformer_onnx, restore_face, model_scale, upsample, use_codeformer, gfp_modela, esr_modela, heap_budget, custom_scale, codeformer_fc_up, codeformer_fidelity, prob_face_thd);
     }
-    ncnn::Mat bg_upsamplencnn(w * scale, h * scale, (size_t) c, c);
+    ncnn::Mat bg_upsamplencnn(w * model_scale, h * model_scale, (size_t) c, c);
     ncnn::Mat bg_presample(w, h, (void *) pixeldata, (size_t) c, c);
     cv::Mat bg_upsamplecv;
     cv::Mat img_faces(h, w, (c == 3) ? CV_8UC3 : CV_8UC4, pixeldata);
@@ -301,10 +332,12 @@ int main(int argc, char **argv)
     std::vector<Object> objects;
 
     std::wstringstream str;
+    char stra[_MAX_PATH];
 
     if (upsample) {
         RealESRGAN real_esrgan;
-        real_esrgan.scale = scale;
+
+        real_esrgan.scale = model_scale;
         real_esrgan.prepadding = 10;
         real_esrgan.tilesize = tilesize;
 
@@ -321,16 +354,27 @@ int main(int argc, char **argv)
         real_esrgan.process(bg_presample, bg_upsamplencnn);
         fprintf(stderr, "Upscale image finished...\n");
 
-        str << imagepath << L"_" << getfilew(esr_model.data()) << L"_s" << scale << ".png" << std::ends;
+        str << imagepath << L"_" << getfilew(esr_model.data()) << L"_ms" << model_scale << L"_cs" << custom_scale << ".png" << std::ends;
+
         wic_encode_image(str.view().data(), bg_upsamplencnn.w, bg_upsamplencnn.h, bg_upsamplencnn.elempack, bg_upsamplencnn.data);
     } else {
-        if (scale)
-            cv::resize(img_faces, bg_upsamplecv, cv::Size(img_faces.cols * scale, img_faces.rows * scale), 0, 0, cv::InterpolationFlags::INTER_CUBIC);
+        if (custom_scale)
+            cv::resize(img_faces, bg_upsamplecv, cv::Size(img_faces.cols * custom_scale, img_faces.rows * custom_scale), 0, 0, cv::InterpolationFlags::INTER_CUBIC);
         else
             img_faces.copyTo(bg_upsamplecv);
-        str << imagepath << L"_" << getfilew(gfp_model.data()) << L"_s" << scale << "_interpolated"
+        str << imagepath << L"_" << getfilew(gfp_model.data()) << L"_s" << model_scale << L"_cs" << custom_scale << "_interpolated"
             << ".png" << std::ends;
         wic_encode_image(str.view().data(), bg_upsamplecv.cols, bg_upsamplecv.rows, bg_upsamplecv.elemSize(), bg_upsamplecv.data);
+    }
+    wcstombs(stra, str.view().data(), _MAX_PATH);
+
+    if (upsample) {
+        if (custom_scale) {
+            cv::Mat pre = cv::imread(stra, 1);
+            cv::Mat up;
+            cv::resize(pre, up, cv::Size(img_faces.cols * custom_scale, img_faces.rows * custom_scale), 0, 0, cv::InterpolationFlags::INTER_LANCZOS4);
+            cv::imwrite(stra, up);
+        }
     }
 
     if (true == restore_face) {
@@ -344,12 +388,18 @@ int main(int argc, char **argv)
             if (use_codeformer_onnx) {
                 pipeline_config_t.onnx = true;
                 pipeline_config_t.ncnn = false;
-                pipeline_config_t.scale = scale;
+                pipeline_config_t.face_upsample = codeformer_fc_up;
+
+                if (custom_scale)
+                    pipeline_config_t.scale = custom_scale;
+                else
+                    pipeline_config_t.scale = model_scale;
+
                 pipeline_config_t.w = codeformer_fidelity;
-                strcpy_s(pipeline_config_t.name, 255, imagepatha);
+                strcpy_s(pipeline_config_t.name, 255, stra);
             }
-            
-            wsdsb::PipeLine pipe(scale);
+
+            wsdsb::PipeLine pipe;
             pipe.CreatePipeLine(pipeline_config_t);
             pipe.Apply(img_faces, img_faces_upsamle);
         } else {
@@ -369,8 +419,10 @@ int main(int argc, char **argv)
                 fprintf(stderr, "Loading GFPGAN model finished...\n");
             }
 
-            face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, scale);
+            if (custom_scale)
+                face_detector.align_warp_face(img_faces_upsamle, objects, trans_matrix_inv, trans_img, custom_scale);
 
+            face_detector.align_warp_face(img_faces_upsamle, objects, trans_matrix_inv, trans_img, model_scale);
             int n_f{};
             for (auto &x: trans_img) {
                 if (false == ncnn_gfp) {
@@ -411,13 +463,15 @@ int main(int argc, char **argv)
             if (use_codeformer) {
                 file << "_codeformer";
                 if (use_codeformer_onnx)
-                    file << "_" << codeformer_fidelity;
+                    file << "_w" << codeformer_fidelity;
             } else {
                 file << "_" << getfilea(gfp_modela);
             }
         }
 
-        file << "_s" << scale;
+        file << "_ms" << model_scale;
+        file << "_cs" << custom_scale;
+
         file << ".png" << std::ends;
 
         cv::imwrite(file.view().data(), img_faces_upsamle);

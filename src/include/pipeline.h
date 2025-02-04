@@ -14,19 +14,22 @@ typedef struct _PipelineConfig {
     bool ncnn = true;
     bool onnx = false;
     char name[_MAX_PATH];
+    wchar_t namew[_MAX_PATH];
+    float prob_thr = 0.5f;
+    float nms_thr = 0.65f;
 }PipelineConfig_t;
 
 class PipeLine
 {
 public:
-    PipeLine(int scale);
+    PipeLine();
     ~PipeLine();
     int CreatePipeLine(PipelineConfig_t& pipeline_config);
     int Apply(const cv::Mat& input_img, cv::Mat& output_img);
 
 private:
-    std::unique_ptr<CodeFormer> codeformer_;
-    std::unique_ptr<FaceG> face_detector_;
+    CodeFormer* codeformer_;
+    FaceG* face_detector_;
     PipelineConfig_t pipeline_config_;
 };
 

@@ -178,7 +178,7 @@ static void generate_proposals(const ncnn::Mat& anchors, int stride, int pad_h, 
     }
 }
 
-FaceG::FaceG(int scale) : prob_threshold(0.5), nms_threshold(0.65), scale(scale) {
+FaceG::FaceG(int scale, float prob_threshold, float nms_threshold) : prob_threshold(prob_threshold), nms_threshold(nms_threshold), scale(scale) {
     face_template.push_back(cv::Point2f(192.98138, 239.94708));
     face_template.push_back(cv::Point2f(318.90277, 240.1936));
     face_template.push_back(cv::Point2f(256.63416, 314.01935));

@@ -6,7 +6,7 @@ namespace wsdsb{
 class FaceG : public Model
 {
 public:
-    FaceG(int scale);
+    FaceG(int scale, float prob_threshold = 0.5f, float nms_threshold = 0.65f);
     ~FaceG();
     int Load(const std::string& model_path) override;
     int Process(const cv::Mat& input_img, void* result) override;
