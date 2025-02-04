@@ -10,6 +10,7 @@ typedef struct _PipelineConfig {
     bool face_upsample = false;
     float w = 0.7;
     std::string model_path;
+    std::wstring up_model;
     int scale = 0;
     bool ncnn = true;
     bool onnx = false;

@@ -58,6 +58,7 @@ static void print_usage() {
     fprintf(stderr, " -d swith CodeFormer infer to onnx\n");
     fprintf(stderr, " -w CodeFormer Fidelity (Only onnx) (default=0.7)\n");
     fprintf(stderr, " -u CodeFormer FaceUpsample\n");
+    fprintf(stderr, " -z CodeFormer FaceUpsample model\n");
     fprintf(stderr, " -p use gfpgan-ncnn infer instead of onnx(DirectML prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)\n");
     fprintf(stderr, " -n no upsample\n");
     fprintf(stderr, " -v verbose\n");
@@ -176,6 +177,8 @@ int main(int argc, char **argv)
     char esr_modela[_MAX_PATH] = "./models/4xNomos8kSC";
     std::wstring gfp_model = L"./models/gfpgan_1.4";
     char gfp_modela[_MAX_PATH] = "./models/gfpgan_1.4";
+    std::wstring cdf_up;
+    char cdf_upa[_MAX_PATH];
 
     //default processing params
     bool upsample = true;
@@ -195,7 +198,7 @@ int main(int argc, char **argv)
 #if _WIN32
     setlocale(LC_ALL, "");
     wchar_t opt;
-    while ((opt = getopt(argc, argv, L"i:s:t:j:f:p:m:g:v:n:h:c:x:w:d:u")) != (wchar_t) 0) {
+    while ((opt = getopt(argc, argv, L"i:s:t:j:f:p:m:g:v:n:h:c:x:w:d:u:z")) != (wchar_t) 0) {
         switch (opt) {
             case L'i': {
                 imagepath = optarg;
@@ -241,6 +244,10 @@ int main(int argc, char **argv)
             } break;
             case L'u': {
                 codeformer_fc_up = true;
+            } break;
+            case L'z': {
+                cdf_up = optarg;
+                wcstombs(cdf_upa, cdf_up.data(), _MAX_PATH);
             } break;
             case L'j': {
                 custom_scale = _wtoi(optarg);
@@ -397,6 +404,7 @@ int main(int argc, char **argv)
 
                 pipeline_config_t.w = codeformer_fidelity;
                 strcpy_s(pipeline_config_t.name, 255, stra);
+                pipeline_config_t.up_model = cdf_up;
             }
 
             wsdsb::PipeLine pipe;
@@ -462,8 +470,11 @@ int main(int argc, char **argv)
         if (restore_face) {
             if (use_codeformer) {
                 file << "_codeformer";
-                if (use_codeformer_onnx)
+                if (use_codeformer_onnx) {
                     file << "_w" << codeformer_fidelity;
+                    if (codeformer_fc_up)
+                        file << "_fu_" << getfilea(cdf_upa);
+                }
             } else {
                 file << "_" << getfilea(gfp_modela);
             }

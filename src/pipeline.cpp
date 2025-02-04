@@ -11,11 +11,12 @@ namespace wsdsb {
     PipeLine::PipeLine() {
     }
     PipeLine::~PipeLine() {
-        delete codeformer_;
+        if (!pipeline_config_.onnx)
+            delete codeformer_;
         delete face_detector_;
     }
 
-    static void paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &trans_matrix_inv, cv::Mat &bg_upsample, bool face_upscale) {
+    static void paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &trans_matrix_inv, cv::Mat &bg_upsample, bool face_upscale, std::wstring upm) {
         trans_matrix_inv.at<float>(0, 2) += 1.0;
         trans_matrix_inv.at<float>(1, 2) += 1.0;
         cv::Mat restfup2;
@@ -27,9 +28,9 @@ namespace wsdsb {
             real_esrgan.tilesize = 200;
 
             std::wstringstream str_param;
-            str_param << "./models/high-fidelity-4x.param" << std::ends;
+            str_param << upm << ".param" << std::ends;
             std::wstringstream str_bin;
-            str_bin << "./models/high-fidelity-4x.bin" << std::ends;
+            str_bin << upm << ".bin" << std::ends;
 
             real_esrgan.load(str_param.view().data(), str_bin.view().data());
 
@@ -101,7 +102,7 @@ namespace wsdsb {
                 return -1;
             }
         }
-        
+
         face_detector_ = new FaceG(pipeline_config.scale, pipeline_config.prob_thr, pipeline_config.nms_thr);
 
         int ret = face_detector_->Load(pipeline_config.model_path);
@@ -140,12 +141,12 @@ namespace wsdsb {
                 cv::Mat restored_face = cv::imread("output.jpg", 1);
                 cv::imwrite(str3.view().data(), restored_face);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
-                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img, pipeline_config_.face_upsample);
+                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img, pipeline_config_.face_upsample, pipeline_config_.up_model);
             }
             if (pipeline_config_.ncnn) {
                 codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
-                paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img, pipeline_config_.face_upsample);
+                paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img, pipeline_config_.face_upsample, pipeline_config_.up_model);
             }
         }
 
