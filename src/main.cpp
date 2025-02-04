@@ -315,6 +315,10 @@ int main(int argc, char **argv)
                 model_scale = 8;
             if (esr_model.find(L"16x", 0) != std::string::npos || esr_model.find(L"x16", 0) != std::string::npos)
                 model_scale = 16;
+
+            fprintf(stderr, "Error autodetect scale of this upscale model please use -s flag to set model scale");
+            ncnn::destroy_gpu_instance();
+            return 0;
         }
 
     if (true == verbose) {
