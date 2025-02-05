@@ -164,7 +164,7 @@ namespace wsdsb {
 
                 std::stringstream str2;
                 str2 << "python codeformer_onnx.py --model_path "
-                     << pipeline_config_.model_path << "codeformer.onnx"
+                     << pipeline_config_.model_path << "codeformer_0_1_0.onnx"
                      << " --image_path " << str.view().data() << " --w " << d << std::ends;
                 system(str2.view().data());
 
