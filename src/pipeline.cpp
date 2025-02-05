@@ -20,7 +20,7 @@ namespace wsdsb {
         trans_matrix_inv.at<float>(0, 2) += 1.0;
         trans_matrix_inv.at<float>(1, 2) += 1.0;
         cv::Mat restfup2;
-        if (face_upscale) {
+        if (face_upscale && !upm.empty()) {
             fprintf(stderr, "Upsample face start...\n");
             RealESRGAN real_esrgan;
             real_esrgan.scale = 4;
@@ -118,23 +118,24 @@ namespace wsdsb {
         face_detector_->Process(input_img, (void *) &pipe_result);
         fprintf(stderr, "Detected %d faces\n", pipe_result.face_count);
 
+        char d[_MAX_PATH];
+        sprintf(d, "%.1f", pipeline_config_.w);
+        *strrchr(d, ',') = '.';
+
         for (int i = 0; i != pipe_result.face_count; ++i) {
             fprintf(stderr, "Codeformer process %d face...\n", i + 1);
+
+            std::stringstream str;
+            str << pipeline_config_.name << "_" << i + 1 << "_crop.png" << std::ends;
+            cv::imwrite(str.view().data(), pipe_result.object[i].trans_img);
+            std::stringstream str3;
+            str3 << pipeline_config_.name << "_" << i + 1 << "_" << pipeline_config_.w << "_codeformer_crop.png" << std::ends;
             //codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
             if (pipeline_config_.onnx) {
-                char d[_MAX_PATH];
-                sprintf(d, "%.1f", pipeline_config_.w);
-                *strrchr(d, ',') = '.';
-
-                std::stringstream str;
-                str << pipeline_config_.name << "_" << i + 1 << "_crop.png" << std::ends;
-                cv::imwrite(str.view().data(), pipe_result.object[i].trans_img);
-                std::stringstream str3;
-                str3 << pipeline_config_.name << "_" << i + 1 << "_" << pipeline_config_.w << "_codeformer_crop.png" << std::ends;
 
                 std::stringstream str2;
                 str2 << "python codeformer_onnx.py --model_path "
-                     << "./codeformer.onnx"
+                     << pipeline_config_.model_path << "codeformer.onnx"
                      << " --image_path " << str.view().data() << " --w " << d << std::ends;
                 system(str2.view().data());
 
@@ -145,6 +146,7 @@ namespace wsdsb {
             }
             if (pipeline_config_.ncnn) {
                 codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
+                cv::imwrite(str3.view().data(), pipe_result.codeformer_result[i].restored_face);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
                 paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img, pipeline_config_.face_upsample, pipeline_config_.up_model);
             }

@@ -53,12 +53,12 @@ static void print_usage() {
     fprintf(stderr, " -f restore faces (GFPGAN 1.4) (default=0)\n");
     fprintf(stderr, " -m <string> esrgan model name (default=./models/x4nomos8ksc)\n");
     fprintf(stderr, " -g <string> gfpgan model path (default=./models/gfpgan_1.4)\n");
-    fprintf(stderr, " -x <digit> YOLOV face detection threshold (default=0,5) (0.3..0.7 recommended)\n");
+    fprintf(stderr, " -x <digit> YOLO face detection threshold (default=0,5) (0,3..0,7 recommended)\n");
     fprintf(stderr, " -c use CodeFormer face restore model\n");
     fprintf(stderr, " -d swith CodeFormer infer to onnx\n");
-    fprintf(stderr, " -w CodeFormer Fidelity (Only onnx) (default=0.7)\n");
+    fprintf(stderr, " -w <digit> CodeFormer Fidelity (Only onnx) (default=0,7)\n");
     fprintf(stderr, " -u CodeFormer FaceUpsample\n");
-    fprintf(stderr, " -z CodeFormer FaceUpsample model\n");
+    fprintf(stderr, " -z <string> CodeFormer FaceUpsample model\n");
     fprintf(stderr, " -p use gfpgan-ncnn infer instead of onnx(DirectML prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)\n");
     fprintf(stderr, " -n no upsample\n");
     fprintf(stderr, " -v verbose\n");
@@ -317,7 +317,7 @@ int main(int argc, char **argv)
                 model_scale = 16;
 
             if (!model_scale) {
-                fprintf(stderr, "Error autodetect scale of this upscale model please use -s flag to set model scale");
+                fprintf(stderr, "Error autodetect scale of this upscale model please override scale factor using -s flag for using this model");
                 ncnn::destroy_gpu_instance();
                 return 0;
             }
@@ -325,6 +325,11 @@ int main(int argc, char **argv)
 
     if (true == verbose) {
         fprintf(stderr, "Input image dimensions w: %d, h: %d, c: %d...\n", w, h, c);
+        if (custom_scale)
+            fprintf(stderr, "Output image dimensions w: %d, h: %d, c: %d...\n", w * custom_scale, h * custom_scale, c);
+        else
+            fprintf(stderr, "Output image dimensions w: %d, h: %d, c: %d...\n", w * model_scale, h * model_scale, c);
+
         fprintf(stderr, "tilesize: %d, ncnn_gfp: %d, onnx_cdf: %d, restore_face: %d, model_scale: %d, upsample: %d, use_codeformer: %d\n"
                         " gfp_model_path: %s\n"
                         " esr_model_path: %s\n"
@@ -332,7 +337,7 @@ int main(int argc, char **argv)
                         " custom_scale: %d\n"
                         " codeformer face upsample: %d\n"
                         " codeformer fidelity: %.1f\n"
-                        " face_detect_threshold: %.1f\n",
+                        " face detect threshold: %.1f\n",
                 tilesize, ncnn_gfp, use_codeformer_onnx, restore_face, model_scale, upsample, use_codeformer, gfp_modela, esr_modela, heap_budget, custom_scale, codeformer_fc_up, codeformer_fidelity, prob_face_thd);
     }
     ncnn::Mat bg_upsamplencnn(w * model_scale, h * model_scale, (size_t) c, c);
@@ -398,20 +403,22 @@ int main(int argc, char **argv)
         if (use_codeformer) {
             wsdsb::PipelineConfig_t pipeline_config_t;
             pipeline_config_t.model_path = "./models/";
-            if (use_codeformer_onnx) {
+            if (use_codeformer_onnx)
                 pipeline_config_t.onnx = true;
-                pipeline_config_t.ncnn = false;
-                pipeline_config_t.face_upsample = codeformer_fc_up;
+            else
+                pipeline_config_t.ncnn = true;
 
-                if (custom_scale)
-                    pipeline_config_t.scale = custom_scale;
-                else
-                    pipeline_config_t.scale = model_scale;
+            pipeline_config_t.face_upsample = codeformer_fc_up;
+            pipeline_config_t.prob_thr = prob_face_thd;
 
-                pipeline_config_t.w = codeformer_fidelity;
-                strcpy_s(pipeline_config_t.name, 255, stra);
-                pipeline_config_t.up_model = cdf_up;
-            }
+            if (custom_scale)
+                pipeline_config_t.scale = custom_scale;
+            else
+                pipeline_config_t.scale = model_scale;
+
+            pipeline_config_t.w = codeformer_fidelity;
+            strcpy_s(pipeline_config_t.name, 255, stra);
+            pipeline_config_t.up_model = cdf_up;
 
             wsdsb::PipeLine pipe;
             pipe.CreatePipeLine(pipeline_config_t);
@@ -435,8 +442,8 @@ int main(int argc, char **argv)
 
             if (custom_scale)
                 face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, custom_scale);
-
-            face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, model_scale);
+            else
+                face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, model_scale);
             int n_f{};
             for (auto &x: trans_img) {
                 if (false == ncnn_gfp) {

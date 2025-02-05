@@ -184,9 +184,9 @@ int Face::load(const std::string &param_path, const std::string &model_path) {
 int Face::align_warp_face(cv::Mat &img, const std::vector<Object> &objects, std::vector<cv::Mat> &trans_matrix_inv,
                           std::vector<cv::Mat> &trans_img, int scaleFactor) {
     std::vector<cv::Point2f> face_template;
-    face_template.push_back(cv::Point2f(197.98138, 246.94708));
-    face_template.push_back(cv::Point2f(318.90277, 240.1936));
-    face_template.push_back(cv::Point2f(256.63416, 314.01935));
+    face_template.push_back(cv::Point2f(192, 240));
+    face_template.push_back(cv::Point2f(319, 240));
+    face_template.push_back(cv::Point2f(257, 371));
     for (size_t i = 0; i < objects.size(); i++) {
         cv::Mat affine_matrix = cv::estimateAffinePartial2D(objects[i].pts, face_template);
 

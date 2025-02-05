@@ -12,7 +12,7 @@ typedef struct _PipelineConfig {
     std::string model_path;
     std::wstring up_model;
     int scale = 0;
-    bool ncnn = true;
+    bool ncnn = false;
     bool onnx = false;
     char name[_MAX_PATH];
     wchar_t namew[_MAX_PATH];
