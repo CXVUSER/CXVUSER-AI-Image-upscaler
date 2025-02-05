@@ -94,7 +94,7 @@ namespace wsdsb {
         int w_edge = int(std::sqrt(total_face_area) / 20);
         int erosion_radius = w_edge * 2;
         cv::Mat inv_mask_center;
-        kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(erosion_radius, erosion_radius));
+        kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(erosion_radius, erosion_radius));
         cv::erode(inv_mask_erosion, inv_mask_center, kernel);
 
         int blur_size = w_edge * 2;

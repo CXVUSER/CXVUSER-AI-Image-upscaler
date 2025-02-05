@@ -10,6 +10,8 @@
 
 #include "wic_image.h"
 
+#include <opencv2\core\ocl.hpp>
+
 #define VER "1.00"
 
 #if _WIN32
@@ -290,6 +292,12 @@ int main(int argc, char **argv)
     else
         tilesize = 32;
 
+    int haveOpenCL{};
+    int useOpenCL{};
+    if (haveOpenCL = cv::ocl::haveOpenCL())
+        cv::ocl::setUseOpenCL(true);
+    useOpenCL = cv::ocl::useOpenCL();
+
 #if _WIN32
     pixeldata = wic_decode_image(imagepath.data(), &w, &h, &c);
     if (!pixeldata) {
@@ -338,10 +346,12 @@ int main(int argc, char **argv)
                         " custom_scale: %d\n"
                         " codeformer face upsample: %d\n"
                         " codeformer fidelity: %.1f\n"
-                        " face detect threshold: %.1f\n",
+                        " face detect threshold: %.1f\n"
+                        " OpenCV have OpenCL: %d\n"
+                        " OpenCV uses OpenCL: %d\n",
                 tilesize, ncnn_gfp, use_codeformer_onnx, restore_face, model_scale,
                 upsample, use_codeformer, gfp_modela, esr_modela, heap_budget,
-                custom_scale, codeformer_fc_up, codeformer_fidelity, prob_face_thd);
+                custom_scale, codeformer_fc_up, codeformer_fidelity, prob_face_thd, haveOpenCL, useOpenCL);
     }
     ncnn::Mat bg_upsamplencnn(w * model_scale, h * model_scale, (size_t) c, c);
     ncnn::Mat bg_presample(w, h, (void *) pixeldata, (size_t) c, c);
