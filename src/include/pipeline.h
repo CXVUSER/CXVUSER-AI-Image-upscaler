@@ -11,7 +11,8 @@ typedef struct _PipelineConfig {
     float w = 0.7;
     std::string model_path;
     std::wstring up_model;
-    int scale = 0;
+    int custom_scale = 0;
+    int model_scale = 0;
     bool ncnn = false;
     bool onnx = false;
     char name[_MAX_PATH];

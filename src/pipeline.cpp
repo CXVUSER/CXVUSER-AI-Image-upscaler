@@ -1,4 +1,4 @@
-// codeformer implemented with ncnn library
+﻿// codeformer implemented with ncnn library
 
 #include "include/pipeline.h"
 #include "realesrgan.h"
@@ -16,11 +16,13 @@ namespace wsdsb {
         delete face_detector_;
     }
 
-    static void paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &trans_matrix_inv, cv::Mat &bg_upsample, bool face_upscale, std::wstring upm) {
-        trans_matrix_inv.at<float>(0, 2) += 1.0;
-        trans_matrix_inv.at<float>(1, 2) += 1.0;
-        cv::Mat restfup2;
-        if (face_upscale && !upm.empty()) {
+    static void paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &trans_matrix_inv, cv::Mat &bg_upsample, PipelineConfig_t &pipe) {
+        trans_matrix_inv.at<double>(0, 2) += (double) pipe.model_scale;
+        trans_matrix_inv.at<double>(1, 2) += (double) pipe.model_scale;
+        cv::Mat restored_face_up;
+        double ups_f = 0.0;
+        if (pipe.face_upsample && !pipe.up_model.empty()) {
+            ups_f = 4.0;
             fprintf(stderr, "Upsample face start...\n");
             RealESRGAN real_esrgan;
             real_esrgan.scale = 4;
@@ -28,38 +30,62 @@ namespace wsdsb {
             real_esrgan.tilesize = 200;
 
             std::wstringstream str_param;
-            str_param << upm << ".param" << std::ends;
+            str_param << pipe.up_model << ".param" << std::ends;
             std::wstringstream str_bin;
-            str_bin << upm << ".bin" << std::ends;
+            str_bin << pipe.up_model << ".bin" << std::ends;
 
             real_esrgan.load(str_param.view().data(), str_bin.view().data());
 
             int w{}, h{}, c{};
+#if _WIN32
             void *pixeldata = wic_decode_image(L"output.jpg", &w, &h, &c);
+#else
+#endif
             ncnn::Mat bg_presample(w, h, (void *) pixeldata, (size_t) c, c);
             ncnn::Mat bg_upsamplencnn(w * 4, h * 4, (size_t) c, c);
             std::wstringstream str_param1;
             str_param1 << "out.png" << std::ends;
             real_esrgan.process(bg_presample, bg_upsamplencnn);
+#if _WIN32
             wic_encode_image(str_param1.view().data(), w * 4, h * 4, 3, bg_upsamplencnn.data);
+#else
+#endif
 
-            cv::Mat restfup = cv::imread("out.png", 1);
-            cv::resize(restfup, restfup2, cv::Size(512, 512), 0, 0, 1);
+            restored_face_up = cv::imread("out.png", 1);
+
+            trans_matrix_inv /= ups_f;
+            trans_matrix_inv.at<double>(0, 2) *= ups_f;
+            trans_matrix_inv.at<double>(1, 2) *= ups_f;
+
             fprintf(stderr, "Upsample face finish...\n");
         }
 
         cv::Mat inv_restored;
-        if (face_upscale)
-            cv::warpAffine(restfup2, inv_restored, trans_matrix_inv, bg_upsample.size(), 1, 0);
+        if (pipe.face_upsample)
+            cv::warpAffine(restored_face_up, inv_restored, trans_matrix_inv, bg_upsample.size(), 1, 0);
         else
             cv::warpAffine(restored_face, inv_restored, trans_matrix_inv, bg_upsample.size(), 1, 0);
 
-        cv::Mat mask = cv::Mat::ones(cv::Size(512, 512), CV_8UC1) * 255;
+        cv::Size ms_size;
+
+        if (pipe.face_upsample)
+            ms_size = cv::Size(512 * ups_f, 512 * ups_f);
+        else
+            ms_size = cv::Size(512, 512);
+
+        cv::Mat mask = cv::Mat::ones(ms_size, CV_8UC1) * 255;
         cv::Mat inv_mask;
         cv::warpAffine(mask, inv_mask, trans_matrix_inv, bg_upsample.size(), 1, 0);
 
+
+        cv::Size krn_size;
+        if (pipe.face_upsample)
+            krn_size = cv::Size(4 * ups_f, 4 * ups_f);
+        else
+            krn_size = cv::Size(4, 4);
+
         cv::Mat inv_mask_erosion;
-        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(4, 4));
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, krn_size);
         cv::erode(inv_mask, inv_mask_erosion, kernel);
         cv::Mat pasted_face;
         cv::bitwise_and(inv_restored, inv_restored, pasted_face, inv_mask_erosion);
@@ -103,7 +129,10 @@ namespace wsdsb {
             }
         }
 
-        face_detector_ = new FaceG(pipeline_config.scale, pipeline_config.prob_thr, pipeline_config.nms_thr);
+        if (pipeline_config.custom_scale)
+            face_detector_ = new FaceG(pipeline_config.custom_scale, pipeline_config.prob_thr, pipeline_config.nms_thr);
+        else
+            face_detector_ = new FaceG(pipeline_config.model_scale, pipeline_config.prob_thr, pipeline_config.nms_thr);
 
         int ret = face_detector_->Load(pipeline_config.model_path);
         if (ret < 0) {
@@ -142,13 +171,15 @@ namespace wsdsb {
                 cv::Mat restored_face = cv::imread("output.jpg", 1);
                 cv::imwrite(str3.view().data(), restored_face);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
-                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img, pipeline_config_.face_upsample, pipeline_config_.up_model);
+                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img,
+                                           pipeline_config_);
             }
             if (pipeline_config_.ncnn) {
                 codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
                 cv::imwrite(str3.view().data(), pipe_result.codeformer_result[i].restored_face);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
-                paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img, pipeline_config_.face_upsample, pipeline_config_.up_model);
+                paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img,
+                                           pipeline_config_);
             }
         }
 

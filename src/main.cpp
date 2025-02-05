@@ -330,7 +330,8 @@ int main(int argc, char **argv)
         else
             fprintf(stderr, "Output image dimensions w: %d, h: %d, c: %d...\n", w * model_scale, h * model_scale, c);
 
-        fprintf(stderr, "tilesize: %d, ncnn_gfp: %d, onnx_cdf: %d, restore_face: %d, model_scale: %d, upsample: %d, use_codeformer: %d\n"
+        fprintf(stderr, "tilesize: %d, ncnn_gfp: %d, onnx_cdf: %d, restore_face: %d,"
+                        " model_scale: %d, upsample: %d, use_codeformer: %d\n"
                         " gfp_model_path: %s\n"
                         " esr_model_path: %s\n"
                         " heap_vram_budget: %d\n"
@@ -338,7 +339,9 @@ int main(int argc, char **argv)
                         " codeformer face upsample: %d\n"
                         " codeformer fidelity: %.1f\n"
                         " face detect threshold: %.1f\n",
-                tilesize, ncnn_gfp, use_codeformer_onnx, restore_face, model_scale, upsample, use_codeformer, gfp_modela, esr_modela, heap_budget, custom_scale, codeformer_fc_up, codeformer_fidelity, prob_face_thd);
+                tilesize, ncnn_gfp, use_codeformer_onnx, restore_face, model_scale,
+                upsample, use_codeformer, gfp_modela, esr_modela, heap_budget,
+                custom_scale, codeformer_fc_up, codeformer_fidelity, prob_face_thd);
     }
     ncnn::Mat bg_upsamplencnn(w * model_scale, h * model_scale, (size_t) c, c);
     ncnn::Mat bg_presample(w, h, (void *) pixeldata, (size_t) c, c);
@@ -352,153 +355,171 @@ int main(int argc, char **argv)
     std::wstringstream str;
     char stra[_MAX_PATH];
 
-    if (upsample) {
-        RealESRGAN real_esrgan;
+    ////------------------------------------- upsampling image -------------------------------------
+    {
+        if (upsample) {
+            RealESRGAN real_esrgan;
 
-        real_esrgan.scale = model_scale;
-        real_esrgan.prepadding = 10;
-        real_esrgan.tilesize = tilesize;
+            real_esrgan.scale = model_scale;
+            real_esrgan.prepadding = 10;
+            real_esrgan.tilesize = tilesize;
 
-        std::wstringstream str_param;
-        str_param << esr_model.data() << ".param" << std::ends;
-        std::wstringstream str_bin;
-        str_bin << esr_model.data() << ".bin" << std::ends;
+            std::wstringstream str_param;
+            str_param << esr_model.data() << ".param" << std::ends;
+            std::wstringstream str_bin;
+            str_bin << esr_model.data() << ".bin" << std::ends;
 
-        fprintf(stderr, "Loading upscayl model from %s...\n", esr_modela);
-        real_esrgan.load(str_param.view().data(), str_bin.view().data());
-        fprintf(stderr, "Loading upscayl model finished...\n");
+            fprintf(stderr, "Loading upscayl model from %s...\n", esr_modela);
+            real_esrgan.load(str_param.view().data(), str_bin.view().data());
+            fprintf(stderr, "Loading upscayl model finished...\n");
 
-        fprintf(stderr, "Upscale image...\n");
-        real_esrgan.process(bg_presample, bg_upsamplencnn);
-        fprintf(stderr, "Upscale image finished...\n");
+            fprintf(stderr, "Upscale image...\n");
+            real_esrgan.process(bg_presample, bg_upsamplencnn);
+            fprintf(stderr, "Upscale image finished...\n");
 
-        str << imagepath << L"_" << getfilew(esr_model.data()) << L"_ms" << model_scale << L"_cs" << custom_scale << ".png" << std::ends;
+            str << imagepath << L"_" << getfilew(esr_model.data()) << L"_ms" << model_scale << L"_cs" << custom_scale << ".png" << std::ends;
 
-        wic_encode_image(str.view().data(), bg_upsamplencnn.w, bg_upsamplencnn.h, bg_upsamplencnn.elempack, bg_upsamplencnn.data);
-    } else {
-        if (custom_scale)
-            cv::resize(img_faces, bg_upsamplecv, cv::Size(img_faces.cols * custom_scale, img_faces.rows * custom_scale), 0, 0, cv::InterpolationFlags::INTER_CUBIC);
-        else
-            img_faces.copyTo(bg_upsamplecv);
-        str << imagepath << L"_" << getfilew(gfp_model.data()) << L"_s" << model_scale << L"_cs" << custom_scale << "_interpolated"
-            << ".png" << std::ends;
-        wic_encode_image(str.view().data(), bg_upsamplecv.cols, bg_upsamplecv.rows, bg_upsamplecv.elemSize(), bg_upsamplecv.data);
-    }
-    wcstombs(stra, str.view().data(), _MAX_PATH);
-
-    if (upsample) {
-        if (custom_scale) {
-            cv::Mat pre = cv::imread(stra, 1);
-            cv::Mat up;
-            cv::resize(pre, up, cv::Size(img_faces.cols * custom_scale, img_faces.rows * custom_scale), 0, 0, cv::InterpolationFlags::INTER_LANCZOS4);
-            cv::imwrite(stra, up);
-        }
-    }
-
-    if (true == restore_face) {
-        char path[_MAX_PATH];
-        wcstombs(path, str.view().data(), _MAX_PATH);
-        cv::Mat img_faces_upsamle = cv::imread(path, 1);
-
-        if (use_codeformer) {
-            wsdsb::PipelineConfig_t pipeline_config_t;
-            pipeline_config_t.model_path = "./models/";
-            if (use_codeformer_onnx)
-                pipeline_config_t.onnx = true;
-            else
-                pipeline_config_t.ncnn = true;
-
-            pipeline_config_t.face_upsample = codeformer_fc_up;
-            pipeline_config_t.prob_thr = prob_face_thd;
-
-            if (custom_scale)
-                pipeline_config_t.scale = custom_scale;
-            else
-                pipeline_config_t.scale = model_scale;
-
-            pipeline_config_t.w = codeformer_fidelity;
-            strcpy_s(pipeline_config_t.name, 255, stra);
-            pipeline_config_t.up_model = cdf_up;
-
-            wsdsb::PipeLine pipe;
-            pipe.CreatePipeLine(pipeline_config_t);
-            pipe.Apply(img_faces, img_faces_upsamle);
+#if _WIN32
+            wic_encode_image(str.view().data(), bg_upsamplencnn.w, bg_upsamplencnn.h, bg_upsamplencnn.elempack, bg_upsamplencnn.data);
+#else
+#endif
+            wcstombs(stra, str.view().data(), _MAX_PATH);
+            if (custom_scale) {
+                cv::Mat pre = cv::imread(stra, 1);
+                cv::Mat up;
+                cv::resize(pre, up, cv::Size(img_faces.cols * custom_scale, img_faces.rows * custom_scale), 0, 0, cv::InterpolationFlags::INTER_LINEAR);
+                cv::imwrite(stra, up);
+            }
         } else {
-            Face face_detector;
-            fprintf(stderr, "Loading YOLOV5 face detector model from /models/yolov5-blazeface...\n");
-            face_detector.load("./models/yolov5-blazeface.param", "./models/yolov5-blazeface.bin");
-            fprintf(stderr, "Loading YOLOV5 face detector model finished...\n");
-
-            fprintf(stderr, "Detecting faces...\n");
-            face_detector.detect(img_faces, objects, prob_face_thd, nms_face_thd);
-            fprintf(stderr, "Detected %d faces\n", objects.size());
-            GFPGAN gfpgan;//GFPGANCleanv1-NoCE-C2
-
-            if (true == ncnn_gfp) {
-                fprintf(stderr, "Loading GFPGANv1 face detector model from /models/GFPGANCleanv1-NoCE-C2-*...\n");
-                gfpgan.load("./models/GFPGANCleanv1-NoCE-C2-encoder.param", "./models/GFPGANCleanv1-NoCE-C2-encoder.bin", "./models/GFPGANCleanv1-NoCE-C2-style.bin");
-                fprintf(stderr, "Loading GFPGAN model finished...\n");
-            }
-
             if (custom_scale)
-                face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, custom_scale);
+                cv::resize(img_faces, bg_upsamplecv, cv::Size(img_faces.cols * custom_scale, img_faces.rows * custom_scale), 0, 0, cv::InterpolationFlags::INTER_LINEAR);
             else
-                face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, model_scale);
-            int n_f{};
-            for (auto &x: trans_img) {
-                if (false == ncnn_gfp) {
-                    std::stringstream str;
-                    str << imagepatha << "_" << n_f << "_crop.png" << std::ends;
-                    cv::imwrite(str.view().data(), x);
+                img_faces.copyTo(bg_upsamplecv);
+            str << imagepath << L"_" << getfilew(gfp_model.data()) << L"_s" << model_scale << L"_cs" << custom_scale << "_interpolated"
+                << ".png" << std::ends;
 
-                    fprintf(stderr, "Processing face %d...\n", n_f + 1);
-                    std::stringstream str2;
-                    str2 << "python gfpgan_onnx.py --model_path " << gfp_modela << ".onnx"
-                         << " --image_path " << str.view() << std::ends;
-                    system(str2.view().data());
-
-                    cv::Mat restored_face = cv::imread("output.jpg", 1);
-                    std::stringstream str3;
-                    str3 << imagepatha << "_" << n_f << "_crop_" << getfilea(gfp_modela) << "_upsampled.png" << std::ends;
-                    cv::imwrite(str3.view().data(), restored_face);
-                    fprintf(stderr, "paste face %d into image...\n", n_f + 1);
-                    paste_faces_to_input_image(restored_face, trans_matrix_inv[n_f], img_faces_upsamle);
-                } else {
-                    ncnn::Mat gfpgan_result;
-                    fprintf(stderr, "Processing face %d...\n", n_f + 1);
-                    gfpgan.process(trans_img[n_f], gfpgan_result);
-
-                    cv::Mat restored_face;
-                    to_ocv(gfpgan_result, restored_face);
-                    fprintf(stderr, "paste face %d into image...\n", n_f + 1);
-                    paste_faces_to_input_image(restored_face, trans_matrix_inv[n_f], img_faces_upsamle);
-                }
-                ++n_f;
-            }
+#if _WIN32
+            wic_encode_image(str.view().data(), bg_upsamplecv.cols, bg_upsamplecv.rows, bg_upsamplecv.elemSize(), bg_upsamplecv.data);
+#else
+#endif
         }
-        std::stringstream file;
-        file << imagepatha;
-        if (upsample)
-            file << "_" << getfilea(esr_modela);
-        if (restore_face) {
+        wcstombs(stra, str.view().data(), _MAX_PATH);
+    }//------------------------------------- upsampling image -------------------------------------
+
+    {//------------------------------------- face restore -------------------------------------
+        if (true == restore_face) {
+            char path[_MAX_PATH];
+            wcstombs(path, str.view().data(), _MAX_PATH);
+            cv::Mat img_faces_upsamle = cv::imread(path, 1);
+
             if (use_codeformer) {
-                file << "_codeformer";
-                if (use_codeformer_onnx) {
-                    file << "_w" << codeformer_fidelity;
-                    if (codeformer_fc_up)
-                        file << "_fu_" << getfilea(cdf_upa);
-                }
+                //------------------------------------- CodeFormer -------------------------------------
+                wsdsb::PipelineConfig_t pipeline_config_t;
+                pipeline_config_t.model_path = "./models/";
+                if (use_codeformer_onnx)
+                    pipeline_config_t.onnx = true;
+                else
+                    pipeline_config_t.ncnn = true;
+
+                pipeline_config_t.face_upsample = codeformer_fc_up;
+                pipeline_config_t.prob_thr = prob_face_thd;
+
+                pipeline_config_t.custom_scale = custom_scale;
+                pipeline_config_t.model_scale = model_scale;
+
+                pipeline_config_t.w = codeformer_fidelity;
+                strcpy_s(pipeline_config_t.name, 255, stra);
+                pipeline_config_t.up_model = cdf_up;
+
+                wsdsb::PipeLine pipe;
+                pipe.CreatePipeLine(pipeline_config_t);
+                pipe.Apply(img_faces, img_faces_upsamle);
+                //------------------------------------- CodeFormer -------------------------------------
             } else {
-                file << "_" << getfilea(gfp_modela);
+                //------------------------------------- GFPGAN -------------------------------------
+                Face face_detector;
+                fprintf(stderr, "Loading YOLOV5 face detector model from /models/yolov5-blazeface...\n");
+                face_detector.load("./models/yolov5-blazeface.param", "./models/yolov5-blazeface.bin");
+                fprintf(stderr, "Loading YOLOV5 face detector model finished...\n");
+
+                fprintf(stderr, "Detecting faces...\n");
+                face_detector.detect(img_faces, objects, prob_face_thd, nms_face_thd);
+                fprintf(stderr, "Detected %d faces\n", objects.size());
+                GFPGAN gfpgan;//GFPGANCleanv1-NoCE-C2
+
+                if (true == ncnn_gfp) {
+                    fprintf(stderr, "Loading GFPGANv1 face detector model from /models/GFPGANCleanv1-NoCE-C2-*...\n");
+                    gfpgan.load("./models/GFPGANCleanv1-NoCE-C2-encoder.param",
+                                "./models/GFPGANCleanv1-NoCE-C2-encoder.bin", "./models/GFPGANCleanv1-NoCE-C2-style.bin");
+                    fprintf(stderr, "Loading GFPGAN model finished...\n");
+                }
+
+                if (custom_scale)
+                    face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, custom_scale);
+                else
+                    face_detector.align_warp_face(img_faces, objects, trans_matrix_inv, trans_img, model_scale);
+                int n_f{};
+                for (auto &x: trans_img) {
+                    if (false == ncnn_gfp) {
+                        std::stringstream str;
+                        str << imagepatha << "_" << n_f << "_crop.png" << std::ends;
+                        cv::imwrite(str.view().data(), x);
+
+                        fprintf(stderr, "Processing face %d...\n", n_f + 1);
+                        std::stringstream str2;
+                        str2 << "python gfpgan_onnx.py --model_path " << gfp_modela << ".onnx"
+                             << " --image_path " << str.view() << std::ends;
+                        system(str2.view().data());
+
+                        cv::Mat restored_face = cv::imread("output.jpg", 1);
+                        std::stringstream str3;
+                        str3 << imagepatha << "_" << n_f << "_crop_" << getfilea(gfp_modela) << "_upsampled.png" << std::ends;
+                        cv::imwrite(str3.view().data(), restored_face);
+                        fprintf(stderr, "paste face %d into image...\n", n_f + 1);
+                        paste_faces_to_input_image(restored_face, trans_matrix_inv[n_f], img_faces_upsamle);
+                    } else {
+                        ncnn::Mat gfpgan_result;
+                        fprintf(stderr, "Processing face %d...\n", n_f + 1);
+                        gfpgan.process(trans_img[n_f], gfpgan_result);
+
+                        cv::Mat restored_face;
+                        to_ocv(gfpgan_result, restored_face);
+                        fprintf(stderr, "paste face %d into image...\n", n_f + 1);
+                        paste_faces_to_input_image(restored_face, trans_matrix_inv[n_f], img_faces_upsamle);
+                    }
+                    ++n_f;
+                }
+                //------------------------------------- GFPGAN -------------------------------------
             }
-        }
+            //------------------------------------- save result image -------------------------------------
+            {
+                std::stringstream file;
+                file << imagepatha;
+                if (upsample)
+                    file << "_" << getfilea(esr_modela);
+                if (restore_face) {
+                    if (use_codeformer) {
+                        file << "_codeformer";
+                        if (use_codeformer_onnx) {
+                            file << "_w" << codeformer_fidelity;
+                            if (codeformer_fc_up)
+                                file << "_fu_" << getfilea(cdf_upa);
+                        }
+                    } else {
+                        file << "_" << getfilea(gfp_modela);
+                    }
+                }
 
-        file << "_ms" << model_scale;
-        file << "_cs" << custom_scale;
+                file << "_ms" << model_scale;
+                if (custom_scale)
+                    file << "_cs" << custom_scale;
 
-        file << ".png" << std::ends;
+                file << ".png" << std::ends;
 
-        cv::imwrite(file.view().data(), img_faces_upsamle);
+                cv::imwrite(file.view().data(), img_faces_upsamle);
+            }
+            //------------------------------------- save result image -------------------------------------
+        }//------------------------------------- face restore -------------------------------------
     }
 #if _WIN32
     CoUninitialize();
