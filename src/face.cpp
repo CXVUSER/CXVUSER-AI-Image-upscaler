@@ -382,7 +382,7 @@ void Face::PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Te
 
     for (int i = 0; i != count; ++i)
     {
-        ((PipeResult_t*)result)->object[i] = proposals[picked[i]];
+        ((PipeResult_t *) result)->object.push_back(proposals[picked[i]]);
 
         // adjust offset to original unpadded
         float x0 = (((PipeResult_t*)result)->object[i].rect.x - (input_tensor[0].pad_w / 2)) / input_tensor[0].scale;

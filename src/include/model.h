@@ -3,7 +3,6 @@
 #include <opencv2/opencv.hpp>
 #include "net.h"
 
-#define MAX_DET_FACE_COUNT 5
 typedef struct _Object{
     cv::Rect_<float> rect;
     int label;
@@ -35,8 +34,8 @@ typedef struct _CodeFormerResult{
 
 typedef struct _PipeResult{
     int face_count;
-    Object_t object[MAX_DET_FACE_COUNT];
-    CodeFormerResult_t codeformer_result[MAX_DET_FACE_COUNT];
+    std::vector<Object_t> object;
+    std::vector<CodeFormerResult_t> codeformer_result;
 }PipeResult_t;
 
 

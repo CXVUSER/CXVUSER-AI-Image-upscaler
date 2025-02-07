@@ -479,6 +479,8 @@ int PipeLine::Apply(const cv::Mat &input_img, cv::Mat &output_img) {
                                            pipeline_config_);
             }
             if (pipeline_config_.ncnn) {
+                CodeFormerResult_t res;
+                pipe_result.codeformer_result.push_back(res);
                 codeformer_NCNN_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
                 cv::imwrite(str3.view().data(), pipe_result.codeformer_result[i].restored_face);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
