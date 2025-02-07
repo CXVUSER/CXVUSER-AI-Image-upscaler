@@ -302,3 +302,15 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 /src.zip
+realesrgan_postproc.spv.hex.h
+realesrgan_postproc_fp16s.spv.hex.h
+realesrgan_postproc_int8s.spv.hex.h
+realesrgan_postproc_tta.spv.hex.h
+realesrgan_postproc_tta_fp16s.spv.hex.h
+realesrgan_postproc_tta_int8s.spv.hex.h
+realesrgan_preproc.spv.hex.h
+realesrgan_preproc_fp16s.spv.hex.h
+realesrgan_preproc_int8s.spv.hex.h
+realesrgan_preproc_tta.spv.hex.h
+realesrgan_preproc_tta_fp16s.spv.hex.h
+realesrgan_preproc_tta_int8s.spv.hex.h
