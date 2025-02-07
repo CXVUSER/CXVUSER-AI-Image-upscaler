@@ -4,7 +4,7 @@
 #define CODEFORMER_H
 #include <memory>
 #include "include/model.h"
-namespace wsdsb{ 
+
 class Encoder;
 class Generator;
 class CodeFormer
@@ -20,5 +20,4 @@ private:
     std::unique_ptr<Encoder> encoder_;
     std::unique_ptr<Generator> generator_;
 };
-}
 #endif // CODEFORMER_H

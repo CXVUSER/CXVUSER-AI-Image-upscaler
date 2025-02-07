@@ -1,5 +1,5 @@
 #include "include/encoder.h"
-namespace wsdsb{ 
+
 Encoder::~Encoder()
 {
     encoder_net_.clear();
@@ -145,5 +145,4 @@ int Encoder::Process(const cv::Mat& input_img, void* result)
     PostProcess(input_tensor, output_tensor, result);
 
     return 0;
-}
 }

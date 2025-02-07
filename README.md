@@ -89,11 +89,13 @@ cmake build ..
 4. <https://github.com/Tencent/ncnn>
 5. <https://github.com/Tencent/ncnn/tree/master/tools/pnnx>
 6. <https://github.com/pnnx/pnnx>
-7. <https://github.com/deepcam-cn/yolov5-face>
-8. <https://github.com/derronqi/yolov7-face>
-9. <https://github.com/derronqi/yolov8-face>
-10. <https://github.com/FeiGeChuanShu/GFPGAN-ncnn>
-11. <https://github.com/ultralytics/ultralytics>
+7. <https://github.com/derronqi/yolov8-face>
+8. <https://github.com/FeiGeChuanShu/GFPGAN-ncnn>
+9. <https://github.com/ultralytics/ultralytics>
+10. <https://github.com/microsoft/DirectML>
+11. <https://github.com/upscayl/upscayl-ncnn>
+12. <https://github.com/sczhou/CodeFormer>
+13. <https://github.com/microsoft/onnxruntime>
 
-## Download Model files (GFPGAN-ESRGAN-ncnn-onnx model files)
-https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml/releases/download/v0.0.1-models/models.7z
+## Download Model files (CODEFORMER-GFPGAN-ESRGAN-ncnn-onnx model files)
+https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml/releases/download/1.0.1/models_1_0_1.7z

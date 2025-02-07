@@ -2,7 +2,7 @@
 #include "include/encoder.h"
 #include "include/generator.h"
 #include "include/codeformer.h"
-namespace wsdsb{ 
+
 CodeFormer::CodeFormer():encoder_(new Encoder),generator_(new Generator)
 {
 }
@@ -34,5 +34,4 @@ int CodeFormer::Process(const cv::Mat& img, CodeFormerResult_t& model_result)
     generator_->Process(img, (void*)&model_result); // restored_face
 
     return 0;
-}
 }

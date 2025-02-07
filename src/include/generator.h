@@ -2,7 +2,6 @@
 #define GENERATOR_H
 #include "include/model.h"
 
-namespace wsdsb{ 
 class Generator : public Model
 {
 public:
@@ -21,5 +20,4 @@ private:
     std::vector<int> input_indexes_;
     std::vector<int> output_indexes_;
 };
-}
 #endif // GENERATOR_H

@@ -314,7 +314,7 @@ int main(int argc, char **argv)
             wcstombs(path, str.view().data(), _MAX_PATH);
             cv::Mat img_faces_upsamle = cv::imread(path, 1);
 
-            wsdsb::PipelineConfig_t pipeline_config_t;
+            PipelineConfig_t pipeline_config_t;
             pipeline_config_t.model_path = "./models/";
             if (use_infer_onnx)
                 pipeline_config_t.onnx = true;
@@ -336,7 +336,7 @@ int main(int argc, char **argv)
             else
                 pipeline_config_t.face_model = gfp_modela;
 
-            wsdsb::PipeLine pipe;
+            PipeLine pipe;
             pipe.CreatePipeLine(pipeline_config_t);
             pipe.Apply(bg_presample_ocv, img_faces_upsamle);
 

@@ -1,5 +1,5 @@
 #include "include/generator.h"
-namespace wsdsb{ 
+
 Generator::~Generator()
 {
     generator_net_.clear();
@@ -127,5 +127,4 @@ int Generator::Process(const cv::Mat& input_img, void* result)
     PostProcess(((CodeFormerResult_t*)result)->output_tensors, output_tensor, result);
 
     return 0;
-}
-}
+};

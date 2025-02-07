@@ -3,8 +3,6 @@
 #include <opencv2/opencv.hpp>
 #include "net.h"
 
-namespace wsdsb{ 
-
 #define MAX_DET_FACE_COUNT 5
 typedef struct _Object{
     cv::Rect_<float> rect;
@@ -55,5 +53,4 @@ protected:
     virtual void PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor, void* result) = 0;
 
 };
-}
 #endif // MODEL_H

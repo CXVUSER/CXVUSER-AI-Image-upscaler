@@ -1,13 +1,13 @@
-#ifndef FACE2_H
-#define FACE2_H
+#ifndef FACE_H
+#define FACE_H
 #include <cmath>
 #include "include/model.h"
-namespace wsdsb{ 
-class FaceG : public Model
+
+class Face : public Model
 {
 public:
-    FaceG();
-    ~FaceG();
+    Face();
+    ~Face();
     int Load(const std::string& model_path) override;
     int Process(const cv::Mat& input_img, void* result) override;
     void setScale(int scale_);
@@ -30,5 +30,4 @@ private:
     std::vector<int> input_indexes_;
     std::vector<int> output_indexes_;
 };
-}
-#endif // FACE2_H
+#endif // FACE_H

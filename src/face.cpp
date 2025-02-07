@@ -1,7 +1,6 @@
 #include "include/face.h"
 #include "cmath"
 
-namespace wsdsb{ 
 static inline float intersection_area(const Object_t& a, const Object_t& b)
 {
     cv::Rect_<float> inter = a.rect & b.rect;
@@ -178,30 +177,30 @@ static void generate_proposals(const ncnn::Mat& anchors, int stride, int pad_h, 
     }
 }
 
-void FaceG::setScale(int scale_) {
+void Face::setScale(int scale_) {
     this->scale = scale_;
     return;
 }
 
-void FaceG::setThreshold(float prob_threshold_, float nms_threshold_) {
+void Face::setThreshold(float prob_threshold_, float nms_threshold_) {
     this->prob_threshold = prob_threshold_;
     this->nms_threshold = nms_threshold_;
     return;
 }
 
-FaceG::FaceG() {
+Face::Face() {
     face_template.push_back(cv::Point2f(192.98138, 239.94708));
     face_template.push_back(cv::Point2f(318.90277, 240.1936));
     face_template.push_back(cv::Point2f(256.63416, 314.01935));
     face_template.push_back(cv::Point2f(201.26117, 371.41043));
     face_template.push_back(cv::Point2f(313.08905, 371.15118));
 }
-FaceG::~FaceG()
+Face::~Face()
 {
     net_.clear();
 }
 
-int FaceG::Load(const std::string& model_path)
+int Face::Load(const std::string& model_path)
 {
     std::string net_param_path = model_path + "/yolov7-lite-e.param";
     std::string net_model_path = model_path + "/yolov7-lite-e.bin";
@@ -241,7 +240,7 @@ int FaceG::Load(const std::string& model_path)
 }
 
 
-void FaceG::PreProcess(const void* input_data, std::vector<Tensor_t>& input_tensor)
+void Face::PreProcess(const void* input_data, std::vector<Tensor_t>& input_tensor)
 {
     const int target_size = 640;
 
@@ -289,7 +288,7 @@ void FaceG::PreProcess(const void* input_data, std::vector<Tensor_t>& input_tens
 
 }
 
-void FaceG::Run(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor)
+void Face::Run(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor)
 {
     ncnn::Extractor net_ex = net_.create_extractor();
 
@@ -305,7 +304,7 @@ void FaceG::Run(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>
         output_tensor.push_back(Tensor_t(out));
     }
 }
-void FaceG::AlignFace(const cv::Mat& img, Object_t& object)
+void Face::AlignFace(const cv::Mat& img, Object_t& object)
 {
     cv::Mat affine_matrix = cv::estimateAffinePartial2D(object.pts, face_template,cv::noArray(), cv::LMEDS);
 
@@ -319,7 +318,7 @@ void FaceG::AlignFace(const cv::Mat& img, Object_t& object)
     cropped_face.copyTo(object.trans_img);
 
 }
-void FaceG::PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor, void* result)
+void Face::PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor, void* result)
 {
     std::vector<Object_t> proposals;
     // stride 8
@@ -411,7 +410,7 @@ void FaceG::PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<T
     
 }
 
-int FaceG::Process(const cv::Mat& input_img, void* result)
+int Face::Process(const cv::Mat& input_img, void* result)
 {
     std::vector<Tensor_t> input_tensor;
     PreProcess((void*)&input_img, input_tensor);
@@ -429,7 +428,7 @@ int FaceG::Process(const cv::Mat& input_img, void* result)
     return 0;
 }
 
-void FaceG::draw_objects(const cv::Mat& bgr, const std::vector<Object_t>& objects)
+void Face::draw_objects(const cv::Mat& bgr, const std::vector<Object_t>& objects)
 {
 
     cv::Mat image = bgr.clone();
@@ -468,5 +467,4 @@ void FaceG::draw_objects(const cv::Mat& bgr, const std::vector<Object_t>& object
 
     cv::imshow("image", image);
     cv::waitKey();
-}
 }

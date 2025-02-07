@@ -1,7 +1,6 @@
 #ifndef ENCODER_H
 #define ENCODER_H
 #include "include/model.h"
-namespace wsdsb{ 
 class Encoder : public Model
 {
 public:
@@ -24,5 +23,4 @@ private:
     std::vector<int> output_indexes_;
 
 };
-}
 #endif // ENCODER_H

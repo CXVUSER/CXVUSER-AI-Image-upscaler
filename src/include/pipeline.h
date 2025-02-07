@@ -7,7 +7,6 @@
 #include "include/face.h"
 #include "include/helpers.h"
 
-namespace wsdsb{
 typedef struct _PipelineConfig {
     bool bg_upsample = false;
     bool face_upsample = false;
@@ -38,12 +37,9 @@ public:
 
 private:
     CodeFormer* codeformer_NCNN_;
-    FaceG* face_detector_NCNN_;
+    Face* face_detector_NCNN_;
     GFPGAN* gfpgan_NCNN_; //GFPGANCleanv1-NoCE-C2
     RealESRGAN* face_up_NCNN_;
     PipelineConfig_t pipeline_config_;
 };
-
-}  // namespace wsdsb
-
 #endif // PIPELINE_H
