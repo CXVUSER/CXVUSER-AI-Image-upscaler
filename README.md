@@ -1,4 +1,4 @@
-# Upscayl-gfpgan-realesr-ncnn-directml 🚀
+# Upscayl-gfpgan-codeformer-realesr-ncnn-directml-vulkan 🚀
 
 Ncnn with Vulkan implementation of **GFPGAN aims at developing Practical Algorithms for Real-world Face Restoration**
 
@@ -8,30 +8,38 @@ The goal of this project is to develop practical algorithms that can restore the
 
 ## :construction: Model support :construction:
 
-1. GFPGANCleanv1-NoCE-C2
-2. GFPGAN 1.2,1.3,1.4
-3. ncnn esrgan models
-4. CodeFormer
+1. GFPGANCleanv1-NoCE-C2(NCNN)
+2. GFPGAN 1.2,1.3,1.4(ONNX)
+3. ncnn ESRGAN models
+4. CodeFormer 0.1.0
+5. RestoreFormer, RestoreFormer-plus-plus
+6. GPEN
 
 ### Usage tips:
 ```
 Usage: this_binary [options]...
 
  -i <img> path to image
- -s <digit> scale factor (default=4)
+ -s <digit> model scale factor (default=autodetect)
+ -j <digit> custom output scale factor
  -t <digit> tile size (default=auto)
- -f restore faces (GFPGAN 1.4) (default=0)
+ -f restore faces (default=GFPGAN ncnn)
  -m <string> esrgan model name (default=./models/x4nomos8ksc)
- -g <string> gfpgan model path (default=./models/gfpgan_1.4)
- -x <digit> YOLOV5 face detection threshold (default=0,5) (0.3..0.7 recommended)
- -c use gfpgan-ncnn infer instead of onnx(DirectML or CUDA prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)
+ -g <string> gfpgan model path (default=./models/gfpgan_1.4.onnx)
+ -x <digit> YOLO face detection threshold (default=0,5) (0,3..0,7 recommended)
+ -c use CodeFormer face restore model
+ -d swith face restore infer to onnx
+ -w <digit> CodeFormer Fidelity (Only onnx) (default=0,7)
+ -u Face Upsample (after face restore)
+ -z <string> FaceUpsample model (ESRGAN)
  -n no upsample
  -v verbose
 ```
 
 ### Sample:
 ```Console
-gfpgan-ncnn-vulkan.exe -i .\avatar6827912_4.jpeg -v -f -x 0,3
+background upsample by (4xNomos8kSC) and interpolate to 8x and face restored by codeformer(onnx) with fidelity 0,5 and upsample by high-fidelity-4x model
+gfpgan-ncnn-vulkan.exe -i .\avatar6827912_4.jpeg -v -m ./models/4xNomos8kSC -x 0,3 -c -d -w 0,5 -u -z ./models/high-fidelity-4x -j 8
 ```
 
 ### Compile:
@@ -68,9 +76,9 @@ git clone --recursive https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-dir
 Configure and build
 
 ```sh
-mkdir -p build && cd build
-cmake ..
-cmake --build . --parallel $(($(nproc) - 1))
+mkdir build
+cd build
+cmake build ..
 ```
    
 ### References
