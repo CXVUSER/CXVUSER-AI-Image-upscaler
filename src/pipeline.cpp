@@ -2,9 +2,14 @@
 
 #include "include/pipeline.h"
 #include "realesrgan.h"
-//#include "wic_image.h"
+#include <numeric>
+
 extern unsigned char *wic_decode_image(const wchar_t *filepath, int *w, int *h, int *c);
 extern int wic_encode_image(const wchar_t *filepath, int w, int h, int c, void *bgrdata);
+
+#if defined(_WIN32)
+#include "include\helpers.h"
+#endif
 
 namespace wsdsb {
 
@@ -37,8 +42,8 @@ namespace wsdsb {
             real_esrgan.load(str_param.view().data(), str_bin.view().data());
 
             int w{}, h{}, c{};
-#if _WIN32
-            void *pixeldata = wic_decode_image(L"output.jpg", &w, &h, &c);
+#if defined(_WIN32)
+            void *pixeldata = wic_decode_image(L"output.png", &w, &h, &c);
 #else
 #endif
             ncnn::Mat bg_presample(w, h, (void *) pixeldata, (size_t) c, c);
@@ -46,7 +51,7 @@ namespace wsdsb {
             std::wstringstream str_param1;
             str_param1 << "out.png" << std::ends;
             real_esrgan.process(bg_presample, bg_upsamplencnn);
-#if _WIN32
+#if defined(_WIN32)
             wic_encode_image(str_param1.view().data(), w * 4, h * 4, 3, bg_upsamplencnn.data);
 #else
 #endif
@@ -58,6 +63,8 @@ namespace wsdsb {
             trans_matrix_inv.at<double>(1, 2) *= ups_f;
 
             fprintf(stderr, "Upsample face finish...\n");
+            if (pixeldata)
+                free(pixeldata);
         }
 
         cv::Mat inv_restored;
@@ -141,6 +148,216 @@ namespace wsdsb {
 
         return 0;
     }
+
+    cv::Mat preprocessImage(const cv::Mat &inputImage) {
+        cv::Mat img;
+
+        // 1. Приведение к типу float32 (если изображение загружено, например, через imread, то оно имеет тип CV_8UC3)
+        inputImage.convertTo(img, CV_32F);
+
+        //// 2. (Опционально) Изменяем размер до 512x512, если требуется
+        // cv::resize(img, img, cv::Size(512, 512), 0, 0, cv::INTER_LINEAR);
+
+        //// 3. Масштабирование в диапазон [0,1]
+        img = img / 255.0;
+
+        //// 4. Конвертация из BGR в RGB
+        cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+
+        //// 5. Создание blob: cv::dnn::blobFromImage выполняет автоматическую перестановку из HWC в CHW
+        ////    Здесь scaleFactor равен 1.0, поскольку мы уже делим на 255.
+        ////    Параметр swapRB установлен в false, так как мы уже перевели в RGB.
+        cv::Mat blob = cv::dnn::blobFromImage(img, 1.0, cv::Size(), cv::Scalar(), false, false, CV_32F);
+        // Теперь blob имеет форму [1, 3, H, W] (NCHW)
+
+        //// 6. Нормализация: операция (img - 0.5)/0.5 равносильна (2*img - 1)
+        ////    Применяем нормализацию по всему blob
+        blob = blob * 2.0 - 1.0;
+
+        //// 7. Blob уже имеет размерность батча (N=1), поэтому дополнительных действий не требуется.
+        return blob;
+        //cv::Mat processed;
+        //inputImage.convertTo(processed, CV_32FC3, 1.0 / 255.0);// [0, 1]
+        //processed = (processed - 0.5) / 0.5;              // -> [-1, 1]
+
+        //// Перестановка каналов HWC -> CHW
+        //std::vector<cv::Mat> channels(3);
+        //cv::split(processed, channels);
+        //for (auto &c: channels) c = c.reshape(1, 1);
+        //cv::hconcat(channels, processed);
+        //return processed.reshape(1, {1, 3, inputImage.rows, inputImage.cols});
+    }
+
+    // Функция postProcessImage преобразует выходной тензор модели в cv::Mat.
+    cv::Mat postProcessImage(const float *outputData, const std::vector<int64_t> &outputShape) {
+        // Ожидаем, что выход имеет форму [N, C, H, W]
+        if (outputShape.size() != 4) {
+            throw std::runtime_error("Expected output tensor shape with 4 dimensions (N, C, H, W).");
+        }
+
+        int N = static_cast<int>(outputShape[0]);
+        int C = static_cast<int>(outputShape[1]);
+        int H = static_cast<int>(outputShape[2]);
+        int W = static_cast<int>(outputShape[3]);
+
+        if (N != 1) {
+            throw std::runtime_error("postProcessImage supports only batch size of 1.");
+        }
+        if (C != 3) {
+            throw std::runtime_error("postProcessImage supports only 3-channel output.");
+        }
+
+        // Размер каждого канала
+        size_t channelSize = static_cast<size_t>(H * W);
+
+        // Извлекаем данные по каналам и создаём для каждого канал cv::Mat.
+        // Здесь предполагается, что данные расположены подряд: сначала весь первый канал, затем второй, затем третий.
+        std::vector<cv::Mat> channels;
+        for (int i = 0; i < C; i++) {
+            // Создаем заголовок для матрицы, без копирования данных (для безопасности делаем clone ниже)
+            cv::Mat channel(H, W, CV_32F, const_cast<float *>(outputData + i * channelSize));
+            channels.push_back(channel.clone());// clone гарантирует непрерывность данных
+        }
+
+        // Объединяем каналы в одно изображение формата HWC (RGB)
+        cv::Mat image;
+        cv::merge(channels, image);
+
+        // Преобразуем значения из диапазона [-1, 1] в [0, 255].
+        // Формула: image_out = (image + 1) / 2 * 255
+        image = (image + 1.0f) / 2.0f * 255.0f;
+        image.convertTo(image, CV_8UC3);
+
+        // Если требуется, преобразуем изображение из RGB в BGR для корректного отображения/сохранения OpenCV
+        cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
+
+        return image;
+    }
+
+    static void RunCodeformerModel(
+            const std::filesystem::path &modelPath,
+            const std::filesystem::path &imagePath,
+            PipelineConfig_t &pipe) {
+        // DML execution provider prefers these session options.
+        Ort::SessionOptions sessionOptions;
+        sessionOptions.DisableMemPattern();
+        sessionOptions.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+
+        // By passing in an explicitly created DML device & queue, the DML execution provider sends work
+        // to the desired device. If not used, the DML execution provider will create its own device & queue.
+        const OrtApi &ortApi = Ort::GetApi();
+
+#if defined(_WIN32)
+        auto [dmlDevice, d3dQueue] = CreateDmlDeviceAndCommandQueue("");
+        const OrtDmlApi *ortDmlApi = nullptr;
+        Ort::ThrowOnError(ortApi.GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void **>(&ortDmlApi)));
+        Ort::ThrowOnError(ortDmlApi->SessionOptionsAppendExecutionProvider_DML1(
+                sessionOptions,
+                dmlDevice.Get(),
+                d3dQueue.Get()));
+#else if defined(__linux__)
+        Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0));
+#endif
+
+        // Load ONNX model into a session.
+        Ort::Env env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "UPS_CDF");
+        Ort::Session ortSession(env, modelPath.wstring().c_str(), sessionOptions);
+
+        Ort::AllocatorWithDefaultOptions ortAllocator;
+
+        auto inputName = ortSession.GetInputNameAllocated(0, ortAllocator);
+        auto fidelityName = ortSession.GetInputNameAllocated(1, ortAllocator);
+        auto inputTypeInfo = ortSession.GetInputTypeInfo(0);
+        auto inputTensorInfo = inputTypeInfo.GetTensorTypeAndShapeInfo();
+        auto inputShape = inputTensorInfo.GetShape();
+        //auto inputDataType = inputTensorInfo.GetElementType();
+
+        /*const uint32_t inputChannels = inputShape[inputShape.size() - 3];
+        const uint32_t inputHeight = inputShape[inputShape.size() - 2];
+        const uint32_t inputWidth = inputShape[inputShape.size() - 1];
+        const uint32_t inputElementSize = inputDataType == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ? sizeof(float) : sizeof(uint16_t);*/
+
+        auto outputName = ortSession.GetOutputNameAllocated(0, ortAllocator);
+        auto outputTypeInfo = ortSession.GetOutputTypeInfo(0);
+        auto outputTensorInfo = outputTypeInfo.GetTensorTypeAndShapeInfo();
+        auto outputShape = outputTensorInfo.GetShape();
+        //auto outputDataType = outputTensorInfo.GetElementType();
+
+        /*const uint32_t outputChannels = outputShape[outputShape.size() - 3];
+        const uint32_t outputHeight = outputShape[outputShape.size() - 2];
+        const uint32_t outputWidth = outputShape[outputShape.size() - 1];
+        const uint32_t outputElementSize = outputDataType == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ? sizeof(float) : sizeof(uint16_t);*/
+
+        // Load image and transform it into an NCHW tensor with the correct shape and data type.
+        // std::vector<std::byte> inputBuffer(inputChannels * inputHeight * inputWidth * inputElementSize);
+        //FillNCHWBufferFromImageFilename(imagePath.wstring(), inputBuffer, inputHeight, inputWidth, inputDataType, ChannelOrder::RGB);
+
+        cv::Mat img = cv::imread(imagePath.string().c_str(), 1);
+        cv::Mat imgp = preprocessImage(img);
+        float inputTensorSize = 1;
+        for (auto dim: inputShape) {
+            inputTensorSize *= static_cast<float>(dim);
+        }
+        // For simplicity, this sample binds input/output buffers in system memory instead of DirectX resources.
+        Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        auto imageTensor = Ort::Value::CreateTensor<float>(
+                memoryInfo,
+                (float *) imgp.data,
+                inputTensorSize,
+                inputShape.data(),
+                inputShape.size());
+
+        /*auto imageTensor = Ort::Value::CreateTensor(
+                memoryInfo,
+                inputBuffer.data(),
+                inputBuffer.size(),
+                inputShape.data(),
+                inputShape.size(), inputDataType);*/
+
+        auto bindings = Ort::IoBinding::IoBinding(ortSession);
+
+        // ===== Создаём второй входной тензор (fidelity) =====
+        // Форма для fidelity – одномерный тензор с одним элементом.
+        std::array<int64_t, 1> fidelityShape = {1};
+        std::vector<double> fidelityValue{pipe.w};
+        auto fidelityTensor = Ort::Value::CreateTensor(
+                memoryInfo,
+                fidelityValue.data(),
+                fidelityValue.size() * sizeof(double),
+                fidelityShape.data(),
+                fidelityShape.size(),
+                ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE);
+
+        //auto logitsName = ortSession.GetOutputNameAllocated(1, ortAllocator);
+        //auto lqFeatName = ortSession.GetOutputNameAllocated(2, ortAllocator);
+
+        bindings.BindInput(inputName.get(), imageTensor);
+        bindings.BindInput(fidelityName.get(), fidelityTensor);
+        bindings.BindOutput(outputName.get(), memoryInfo);
+        //bindings.BindOutput(logitsName.get(), memoryInfo);
+        //bindings.BindOutput(lqFeatName.get(), memoryInfo);
+
+        // Run the session to get inference results.
+        Ort::RunOptions runOpts;
+        ortSession.Run(runOpts, bindings);
+        bindings.SynchronizeOutputs();
+
+        cv::imwrite("output.png", postProcessImage((float *) bindings.GetOutputValues()[0].GetTensorRawData(), outputShape));
+
+        //std::span<const std::byte> outputBuffer(
+        //        reinterpret_cast<const std::byte *>(bindings.GetOutputValues()[0].GetTensorRawData()),
+        //        outputChannels * outputHeight * outputWidth * outputElementSize);
+
+        //std::cout << "Saving inference results to output.png" << std::endl;
+        //SaveNCHWBufferToImageFilename(
+        //        L"output.png",
+        //        outputBuffer,
+        //        outputHeight,
+        //        outputWidth,
+        //        outputDataType,
+        //        ChannelOrder::RGB);
+    }
+
     int PipeLine::Apply(const cv::Mat &input_img, cv::Mat &output_img) {
         PipeResult_t pipe_result;
         fprintf(stderr, "Detecting faces...\n");
@@ -153,22 +370,17 @@ namespace wsdsb {
 
         for (int i = 0; i != pipe_result.face_count; ++i) {
             fprintf(stderr, "Codeformer process %d face...\n", i + 1);
-
+            std::stringstream str3;
+            str3 << pipeline_config_.name << "_" << i + 1 << "_" << pipeline_config_.w << "_codeformer_crop.png" << std::ends;
             std::stringstream str;
             str << pipeline_config_.name << "_" << i + 1 << "_crop.png" << std::ends;
             cv::imwrite(str.view().data(), pipe_result.object[i].trans_img);
-            std::stringstream str3;
-            str3 << pipeline_config_.name << "_" << i + 1 << "_" << pipeline_config_.w << "_codeformer_crop.png" << std::ends;
-            //codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
+
             if (pipeline_config_.onnx) {
-
-                std::stringstream str2;
-                str2 << "python codeformer_onnx.py --model_path "
-                     << pipeline_config_.model_path << "codeformer_0_1_0.onnx"
-                     << " --image_path " << str.view().data() << " --w " << d << std::ends;
-                system(str2.view().data());
-
-                cv::Mat restored_face = cv::imread("output.jpg", 1);
+                RunCodeformerModel(
+                        "./models/codeformer_0_1_0.onnx",
+                        str.view().data(), pipeline_config_);
+                cv::Mat restored_face = cv::imread("output.png", 1);
                 cv::imwrite(str3.view().data(), restored_face);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
                 paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img,
@@ -180,9 +392,30 @@ namespace wsdsb {
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
                 paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img,
                                            pipeline_config_);
+                //codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
+
+                //std::stringstream str;
+                //str << pipeline_config_.name << "_" << i + 1 << "_crop.png" << std::ends;
+                //cv::imwrite(str.view().data(), pipe_result.object[i].trans_img);
+                //std::stringstream str3;
+                //str3 << pipeline_config_.name << "_" << i + 1 << "_" << pipeline_config_.w << "_codeformer_crop.png" << std::ends;
+                ////codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
+                //if (pipeline_config_.onnx) {
+
+                //    std::stringstream str2;
+                //    str2 << "python codeformer_onnx.py --model_path "
+                //         << pipeline_config_.model_path << "codeformer_0_1_0.onnx"
+                //         << " --image_path " << str.view().data() << " --w " << d << std::ends;
+                //    system(str2.view().data());
+
+                //    cv::Mat restored_face = cv::imread("output.jpg", 1);
+                //    cv::imwrite(str3.view().data(), restored_face);
+                //    fprintf(stderr, "Paste %d face in photo...\n", i + 1);
+                //    paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img,
+                //                               pipeline_config_);
+                //}
             }
         }
-
         return 0;
     }
-}// namespace wsdsb
+};// namespace wsdsb

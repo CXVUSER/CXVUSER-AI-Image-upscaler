@@ -1,6 +1,22 @@
 cmake_minimum_required(VERSION 3.12)
 project(gfpgan-ncnn-vulkan)
 
+include(FetchContent)
+
+if(UNIX AND NOT APPLE)
+    set(LINUX TRUE)
+endif()
+
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+set(TARGET_ARCH ${CMAKE_CXX_COMPILER_ARCHITECTURE_ID})
+if(TARGET_ARCH STREQUAL AMD64)
+    set(TARGET_ARCH x64)
+endif()
+
 set(CMAKE_BUILD_TYPE Release)
 
 # -------------- Support C++17 for using filesystem  ------------------#
@@ -19,8 +35,7 @@ set(CMAKE_CXX_EXTENSIONS ON)
 
 option(USE_SYSTEM_NCNN "build with system libncnn" OFF)
 option(USE_SYSTEM_WEBP "build with system libwebp" OFF)
-
-
+option(USE_STATIC_MOLTENVK "link moltenvk static library" OFF)
 
 find_package(Threads)
 find_package(OpenMP REQUIRED)
@@ -37,6 +52,53 @@ endif ()
 
 find_program(GLSLANGVALIDATOR_EXECUTABLE NAMES glslangValidator PATHS $ENV{VULKAN_SDK}/bin NO_CMAKE_FIND_ROOT_PATH)
 message(STATUS "Found glslangValidator: ${GLSLANGVALIDATOR_EXECUTABLE}")
+
+macro(compile_shader SHADER_SRC)
+    set(SHADER_SRC_FULLPATH ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER_SRC})
+
+    get_filename_component(SHADER_SRC_NAME_WE ${SHADER_SRC} NAME_WE)
+    set(SHADER_SPV_HEX_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER_SRC_NAME_WE}.spv.hex.h)
+    add_custom_command(
+        OUTPUT ${SHADER_SPV_HEX_FILE}
+        COMMAND ${GLSLANGVALIDATOR_EXECUTABLE}
+        ARGS -V -s -x -o ${SHADER_SPV_HEX_FILE} ${SHADER_SRC_FULLPATH}
+        DEPENDS ${SHADER_SRC_FULLPATH}
+        COMMENT "Building SPIR-V module ${SHADER_SRC_NAME_WE}.spv"
+        VERBATIM
+    )
+    set_source_files_properties(${SHADER_SPV_HEX_FILE} PROPERTIES GENERATED TRUE)
+    list(APPEND SHADER_SPV_HEX_FILES ${SHADER_SPV_HEX_FILE})
+
+    # fp16 storage
+    set(SHADER_fp16s_SRC_NAME_WE "${SHADER_SRC_NAME_WE}_fp16s")
+
+    set(SHADER_fp16s_SPV_HEX_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER_fp16s_SRC_NAME_WE}.spv.hex.h)
+    add_custom_command(
+        OUTPUT ${SHADER_fp16s_SPV_HEX_FILE}
+        COMMAND ${GLSLANGVALIDATOR_EXECUTABLE}
+        ARGS -DNCNN_fp16_storage=1 -V -s -x -o ${SHADER_fp16s_SPV_HEX_FILE} ${SHADER_SRC_FULLPATH}
+        DEPENDS ${SHADER_SRC_FULLPATH}
+        COMMENT "Building SPIR-V module ${SHADER_fp16s_SRC_NAME_WE}.spv"
+        VERBATIM
+    )
+    set_source_files_properties(${SHADER_fp16s_SPV_HEX_FILE} PROPERTIES GENERATED TRUE)
+    list(APPEND SHADER_SPV_HEX_FILES ${SHADER_fp16s_SPV_HEX_FILE})
+
+    # int8 storage
+    set(SHADER_int8s_SRC_NAME_WE "${SHADER_SRC_NAME_WE}_int8s")
+
+    set(SHADER_int8s_SPV_HEX_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER_int8s_SRC_NAME_WE}.spv.hex.h)
+    add_custom_command(
+        OUTPUT ${SHADER_int8s_SPV_HEX_FILE}
+        COMMAND ${GLSLANGVALIDATOR_EXECUTABLE}
+        ARGS -DNCNN_fp16_storage=1 -DNCNN_int8_storage=1 -V -s -x -o ${SHADER_int8s_SPV_HEX_FILE} ${SHADER_SRC_FULLPATH}
+        DEPENDS ${SHADER_SRC_FULLPATH}
+        COMMENT "Building SPIR-V module ${SHADER_int8s_SRC_NAME_WE}.spv"
+        VERBATIM
+    )
+    set_source_files_properties(${SHADER_int8s_SPV_HEX_FILE} PROPERTIES GENERATED TRUE)
+    list(APPEND SHADER_SPV_HEX_FILES ${SHADER_int8s_SPV_HEX_FILE})
+endmacro()
 
 find_package(OpenCV REQUIRED)
 
@@ -57,6 +119,31 @@ else ()
     message(FATAL_ERROR "OpenMP Not Found!")
 endif ()
 
+if(USE_SYSTEM_NCNN)
+    set(GLSLANG_TARGET_DIR "GLSLANG-NOTFOUND" CACHE PATH "Absolute path to glslangTargets.cmake directory")
+    if(NOT GLSLANG_TARGET_DIR AND NOT DEFINED ENV{GLSLANG_TARGET_DIR})
+        message(WARNING "GLSLANG_TARGET_DIR must be defined! USE_SYSTEM_NCNN will be turned off.")
+        set(USE_SYSTEM_NCNN OFF)
+    else()
+        message(STATUS "Using glslang install located at ${GLSLANG_TARGET_DIR}")
+
+        find_package(Threads)
+
+        include("${GLSLANG_TARGET_DIR}/OSDependentTargets.cmake")
+        include("${GLSLANG_TARGET_DIR}/OGLCompilerTargets.cmake")
+        if(EXISTS "${GLSLANG_TARGET_DIR}/HLSLTargets.cmake")
+            # hlsl support can be optional
+            include("${GLSLANG_TARGET_DIR}/HLSLTargets.cmake")
+        endif()
+        include("${GLSLANG_TARGET_DIR}/glslangTargets.cmake")
+        include("${GLSLANG_TARGET_DIR}/SPIRVTargets.cmake")
+
+        if (NOT TARGET glslang OR NOT TARGET SPIRV)
+            message(WARNING "glslang or SPIRV target not found! USE_SYSTEM_NCNN will be turned off.")
+            set(USE_SYSTEM_NCNN OFF)
+        endif()
+    endif()
+endif()
 
 if(USE_SYSTEM_NCNN)
     find_package(ncnn)
@@ -95,8 +182,6 @@ if(NOT USE_SYSTEM_NCNN)
     option(NCNN_DISABLE_EXCEPTION "" OFF)
     option(NCNN_SYSTEM_GLSLANG "" OFF)
     option(NCNN_SHARED_LIB "" OFF)
-
-
 
     add_subdirectory(external/ncnn)
 endif()
@@ -137,8 +222,130 @@ endif()
 
 set(NCNN_GFPGAN_LINK_LIBRARIES ncnn webp ${Vulkan_LIBRARY})
 
+# look for vulkan compute shader and compile
+set(SHADER_SPV_HEX_FILES)
+
+compile_shader(realesrgan_preproc.comp)
+compile_shader(realesrgan_postproc.comp)
+compile_shader(realesrgan_preproc_tta.comp)
+compile_shader(realesrgan_postproc_tta.comp)
+
+add_custom_target(generate-spirv DEPENDS ${SHADER_SPV_HEX_FILES})
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+if(WIN32)
+# -----------------------------------------------------------------------------
+# onnxruntime
+# -----------------------------------------------------------------------------
+FetchContent_Declare(
+    ort
+    URL https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.DirectML/1.20.1
+)
 
-add_executable(gfpgan-ncnn-vulkan gfpgan-ncnn-vulkan-demo.cpp gfpgan.cpp face.cpp realesrgan.cpp)
-target_link_libraries(gfpgan-ncnn-vulkan ${NCNN_GFPGAN_LINK_LIBRARIES} ${OpenCV_LIBS})
+FetchContent_MakeAvailable(ort)
+
+set(ort_bin_dir "${ort_SOURCE_DIR}/runtimes/win-${TARGET_ARCH}/native")
+
+add_library(ort INTERFACE)
+target_include_directories(ort INTERFACE "${ort_SOURCE_DIR}/build/native/include")
+target_link_libraries(ort INTERFACE "${ort_bin_dir}/onnxruntime.lib")
+
+# -----------------------------------------------------------------------------
+# directx-headers - to get the latest DXCore header with GENERIC_ML GUID
+# -----------------------------------------------------------------------------
+FetchContent_Declare(
+    dxheaders
+    GIT_REPOSITORY https://github.com/microsoft/DirectX-Headers
+    GIT_TAG de28d93dfa9ebf3e473127c1c657e1920a5345ee # v1.613.1
+)
+
+FetchContent_MakeAvailable(dxheaders)
+
+set(ort_bin_dir "${ort_SOURCE_DIR}/runtimes/win-${TARGET_ARCH}/native")
+
+add_library(dxheaders INTERFACE)
+target_include_directories(dxheaders INTERFACE ${dxheaders_SOURCE_DIR}/include/directx)
+target_link_libraries(dxheaders INTERFACE Microsoft::DirectX-Guids)
+
+# -----------------------------------------------------------------------------
+# directml
+# -----------------------------------------------------------------------------
+FetchContent_Declare(
+    dml
+    URL https://www.nuget.org/api/v2/package/Microsoft.AI.DirectML/1.15.4
+)
+
+FetchContent_MakeAvailable(dml)
+
+set(dml_bin_dir "${dml_SOURCE_DIR}/bin/${TARGET_ARCH}-win")
+
+add_library(dml INTERFACE)
+target_include_directories(dml INTERFACE "${dml_SOURCE_DIR}/include")
+target_link_libraries(dml INTERFACE "${dml_bin_dir}/directml.lib")
+elseif(LINUX)
+# -----------------------------------------------------------------------------
+# onnxruntime
+# -----------------------------------------------------------------------------
+FetchContent_Declare(
+    ort
+    URL https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu/1.16.3
+)
+
+FetchContent_MakeAvailable(ort)
+
+set(ort_bin_dir "${ort_SOURCE_DIR}/runtimes/linux-${TARGET_ARCH}/native")
+
+add_library(ort INTERFACE)
+target_include_directories(ort INTERFACE "${ort_SOURCE_DIR}/build/native/include")
+target_link_libraries(ort INTERFACE "${ort_bin_dir}/onnxruntime.lib")
+elseif(APPLE)
+# -----------------------------------------------------------------------------
+# onnxruntime
+# -----------------------------------------------------------------------------
+FetchContent_Declare(
+    ort
+    URL https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu/1.20.1
+)
+
+FetchContent_MakeAvailable(ort)
+
+set(ort_bin_dir "${ort_SOURCE_DIR}/runtimes/osx-${TARGET_ARCH}/native")
+
+add_library(ort INTERFACE)
+target_include_directories(ort INTERFACE "${ort_SOURCE_DIR}/build/native/include")
+target_link_libraries(ort INTERFACE "${ort_bin_dir}/onnxruntime.lib")
+
+endif()
+
+add_executable(${CMAKE_PROJECT_NAME} main.cpp gfpgan.cpp face.cpp face2.cpp helpers.cpp generator.cpp encoder.cpp codeformer.cpp pipeline.cpp realesrgan.cpp)
+add_dependencies(${CMAKE_PROJECT_NAME} generate-spirv)
+if(USE_STATIC_MOLTENVK)
+    find_library(CoreFoundation NAMES CoreFoundation)
+    find_library(Foundation NAMES Foundation)
+    find_library(Metal NAMES Metal)
+    find_library(QuartzCore NAMES QuartzCore)
+    find_library(CoreGraphics NAMES CoreGraphics)
+    find_library(Cocoa NAMES Cocoa)
+    find_library(IOKit NAMES IOKit)
+    find_library(IOSurface NAMES IOSurface)
+
+    list(APPEND REALESRGAN_LINK_LIBRARIES
+        ${Metal}
+        ${QuartzCore}
+        ${CoreGraphics}
+        ${Cocoa}
+        ${IOKit}
+        ${IOSurface}
+        ${Foundation}
+        ${CoreFoundation}
+    )
+endif()
+
+if(WIN32)
+target_link_libraries(${CMAKE_PROJECT_NAME} ${NCNN_GFPGAN_LINK_LIBRARIES} ${OpenCV_LIBS} ort dml d3d12 dxcore dxheaders)
+elseif(LINUX)
+target_link_libraries(${CMAKE_PROJECT_NAME} ${NCNN_GFPGAN_LINK_LIBRARIES} ${OpenCV_LIBS} ort)
+else()
+target_link_libraries(${CMAKE_PROJECT_NAME} ${NCNN_GFPGAN_LINK_LIBRARIES} ${OpenCV_LIBS} ort)
+endif()

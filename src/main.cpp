@@ -266,7 +266,7 @@ int main(int argc, char **argv)
     }
 #endif
 
-    if (false == upsample && false == restore_face) {
+    if (imagepath.empty() || (false == upsample && false == restore_face)) {
         print_usage();
         return 0;
     }
@@ -345,8 +345,8 @@ int main(int argc, char **argv)
                         " heap_vram_budget: %d\n"
                         " custom_scale: %d\n"
                         " codeformer face upsample: %d\n"
-                        " codeformer fidelity: %.1f\n"
-                        " face detect threshold: %.1f\n"
+                        " codeformer fidelity: %.2f\n"
+                        " face detect threshold: %.2f\n"
                         " OpenCV have OpenCL: %d\n"
                         " OpenCV uses OpenCL: %d\n",
                 tilesize, ncnn_gfp, use_codeformer_onnx, restore_face, model_scale,
