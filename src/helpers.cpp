@@ -3,6 +3,45 @@
 
 #include "helpers.h"
 
+bool pathisfolderw(wchar_t *c) {
+    if (c) {
+        if (wcsrchr(c, L'\\'))
+            return true;
+        if (wcsrchr(c, L'/'))
+            return true;
+        return false;
+    }
+};
+bool pathisfoldera(char *c) {
+    if (c) {
+        if (strrchr(c, '/'))
+            return true;
+        if (strrchr(c, '\\'))
+            return true;
+        return false;
+    }
+};
+wchar_t *getfilew(wchar_t *t) {
+    wchar_t *str = 0;
+    if (t) {
+        if (str = wcsrchr(t, L'/'))
+            return str + 1;
+        if (str = wcsrchr(t, L'\\'))
+            return str + 1;
+    }
+    return str;
+};
+char *getfilea(char *t) {
+    char *str = 0;
+    if (t) {
+        if (str = strrchr(t, '/'))
+            return str + 1;
+        if (str = strrchr(t, '\\'))
+            return str + 1;
+    }
+    return str;
+};
+
 #if defined(_WIN32)
 std::tuple<Microsoft::WRL::ComPtr<IDXCoreAdapter>, D3D_FEATURE_LEVEL> SelectAdapter(
     std::string_view adapterNameFilter)

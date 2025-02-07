@@ -1,37 +1,34 @@
-#ifndef FACE_H
-#define FACE_H
-#include <cfloat>
-#include <cstdio>
-#include <vector>
+#ifndef FACE2_H
+#define FACE2_H
 #include <cmath>
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/calib3d/calib3d.hpp>
-#include "net.h"
-
-struct Object
-{
-    cv::Rect_<float> rect;
-    int label;
-    float score;
-    std::vector<cv::Point2f> pts;
-    cv::Mat trans_inv;
-
-};
-
-class Face
+#include "include/model.h"
+namespace wsdsb{ 
+class FaceG : public Model
 {
 public:
-    Face();
-    ~Face();
-    int load(const std::string& param_path, const std::string& model_path);
-    int detect(const cv::Mat& rgb, std::vector<Object>& objects, float prob_threshold = 0.5f, float nms_threshold = 0.3f);
-    int align_warp_face(cv::Mat& img, const std::vector<Object>& objects, std::vector<cv::Mat>& trans_matrix_inv, std::vector<cv::Mat>& trans_img, int scaleFactor = 2);
-    void draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects);
+    FaceG();
+    ~FaceG();
+    int Load(const std::string& model_path) override;
+    int Process(const cv::Mat& input_img, void* result) override;
+    void setScale(int scale_);
+    void setThreshold(float prob_threshold_, float nms_threshold_);
+
+protected:
+    void Run(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor) override;
+    void PreProcess(const void* input_data, std::vector<Tensor_t>& input_tensor) override;
+    void PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor, void* result) override;
 private:
-    ncnn::Net net;
-
+    void AlignFace(const cv::Mat& img, Object_t& objects);
+    void draw_objects(const cv::Mat& bgr, const std::vector<Object_t>& objects);
+private:
+    float prob_threshold;
+    float nms_threshold;
+    const float norm_vals_[3] = { 1 / 255.0f, 1 / 255.0f, 1 / 255.0f };
+    std::vector<cv::Point2f> face_template;
+    ncnn::Net net_;
+    int scale;
+    std::vector<int> input_indexes_;
+    std::vector<int> output_indexes_;
 };
-
-#endif // FACE_H
+}
+#endif // FACE2_H

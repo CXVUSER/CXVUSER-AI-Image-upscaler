@@ -1,13 +1,11 @@
-﻿// codeformer implemented with ncnn library
+﻿// Face restore pipeline
 
 #include "include/pipeline.h"
-#include "realesrgan.h"
 #include <numeric>
 
+#if defined(_WIN32)
 extern unsigned char *wic_decode_image(const wchar_t *filepath, int *w, int *h, int *c);
 extern int wic_encode_image(const wchar_t *filepath, int w, int h, int c, void *bgrdata);
-
-#if defined(_WIN32)
 #include "include\helpers.h"
 #endif
 
@@ -16,30 +14,45 @@ namespace wsdsb {
     PipeLine::PipeLine() {
     }
     PipeLine::~PipeLine() {
-        if (!pipeline_config_.onnx)
-            delete codeformer_;
-        delete face_detector_;
+        if (true == pipeline_config_.ncnn)
+            if (true == pipeline_config_.codeformer)
+                delete codeformer_NCNN_;
+            else
+                delete gfpgan_NCNN_;
+
+        if (pipeline_config_.face_upsample)
+            delete face_up_NCNN_;
+
+        delete face_detector_NCNN_;
     }
 
-    static void paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &trans_matrix_inv, cv::Mat &bg_upsample, PipelineConfig_t &pipe) {
+    static void to_ocv(const ncnn::Mat &result, cv::Mat &out) {
+        cv::Mat cv_result_32F = cv::Mat::zeros(cv::Size(512, 512), CV_32FC3);
+        for (int i = 0; i < result.h; i++) {
+            for (int j = 0; j < result.w; j++) {
+                cv_result_32F.at<cv::Vec3f>(i, j)[2] = (result.channel(0)[i * result.w + j] + 1) / 2;
+                cv_result_32F.at<cv::Vec3f>(i, j)[1] = (result.channel(1)[i * result.w + j] + 1) / 2;
+                cv_result_32F.at<cv::Vec3f>(i, j)[0] = (result.channel(2)[i * result.w + j] + 1) / 2;
+            }
+        }
+
+        cv::Mat cv_result_8U;
+        cv_result_32F.convertTo(cv_result_8U, CV_8UC3, 255.0, 0);
+
+        cv_result_8U.copyTo(out);
+    };
+
+    void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &trans_matrix_inv, cv::Mat &bg_upsample, PipelineConfig_t &pipe) {
         trans_matrix_inv.at<double>(0, 2) += (double) pipe.model_scale;
         trans_matrix_inv.at<double>(1, 2) += (double) pipe.model_scale;
-        cv::Mat restored_face_up;
+        cv::Mat upscaled_face;
         double ups_f = 0.0;
-        if (pipe.face_upsample && !pipe.up_model.empty()) {
+        if (pipe.face_upsample && !pipe.fc_up_model.empty()) {
             ups_f = 4.0;
             fprintf(stderr, "Upsample face start...\n");
-            RealESRGAN real_esrgan;
-            real_esrgan.scale = 4;
-            real_esrgan.prepadding = 10;
-            real_esrgan.tilesize = 200;
-
-            std::wstringstream str_param;
-            str_param << pipe.up_model << ".param" << std::ends;
-            std::wstringstream str_bin;
-            str_bin << pipe.up_model << ".bin" << std::ends;
-
-            real_esrgan.load(str_param.view().data(), str_bin.view().data());
+            face_up_NCNN_->scale = 4;
+            face_up_NCNN_->prepadding = 10;
+            face_up_NCNN_->tilesize = 200;
 
             int w{}, h{}, c{};
 #if defined(_WIN32)
@@ -50,13 +63,13 @@ namespace wsdsb {
             ncnn::Mat bg_upsamplencnn(w * 4, h * 4, (size_t) c, c);
             std::wstringstream str_param1;
             str_param1 << "out.png" << std::ends;
-            real_esrgan.process(bg_presample, bg_upsamplencnn);
+            face_up_NCNN_->process(bg_presample, bg_upsamplencnn);
 #if defined(_WIN32)
             wic_encode_image(str_param1.view().data(), w * 4, h * 4, 3, bg_upsamplencnn.data);
 #else
 #endif
 
-            restored_face_up = cv::imread("out.png", 1);
+            upscaled_face = cv::imread("out.png", 1);
 
             trans_matrix_inv /= ups_f;
             trans_matrix_inv.at<double>(0, 2) *= ups_f;
@@ -69,7 +82,7 @@ namespace wsdsb {
 
         cv::Mat inv_restored;
         if (pipe.face_upsample)
-            cv::warpAffine(restored_face_up, inv_restored, trans_matrix_inv, bg_upsample.size(), 1, 0);
+            cv::warpAffine(upscaled_face, inv_restored, trans_matrix_inv, bg_upsample.size(), 1, 0);
         else
             cv::warpAffine(restored_face, inv_restored, trans_matrix_inv, bg_upsample.size(), 1, 0);
 
@@ -128,22 +141,44 @@ namespace wsdsb {
     int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
         pipeline_config_ = pipeline_config;
 
-        if (false == pipeline_config.onnx) {
-            codeformer_ = new CodeFormer();
-            int ret = codeformer_->Load(pipeline_config_.model_path);
-            if (ret < 0) {
-                return -1;
+        if (true == pipeline_config.ncnn) {
+            if (pipeline_config_.codeformer) {
+                codeformer_NCNN_ = new CodeFormer();
+                int ret = codeformer_NCNN_->Load(pipeline_config_.model_path);
+                if (ret < 0) {
+                    return -1;
+                }
+            } else {
+                gfpgan_NCNN_ = new GFPGAN();
+                fprintf(stderr, "Loading GFPGANv1 face detector model from /models/GFPGANCleanv1-NoCE-C2-*...\n");
+                gfpgan_NCNN_->load("./models/GFPGANCleanv1-NoCE-C2-encoder.param",
+                                   "./models/GFPGANCleanv1-NoCE-C2-encoder.bin", "./models/GFPGANCleanv1-NoCE-C2-style.bin");
+                fprintf(stderr, "Loading GFPGAN model finished...\n");
             }
         }
 
-        if (pipeline_config.custom_scale)
-            face_detector_ = new FaceG(pipeline_config.custom_scale, pipeline_config.prob_thr, pipeline_config.nms_thr);
-        else
-            face_detector_ = new FaceG(pipeline_config.model_scale, pipeline_config.prob_thr, pipeline_config.nms_thr);
+        face_detector_NCNN_ = new FaceG();
 
-        int ret = face_detector_->Load(pipeline_config.model_path);
+        if (pipeline_config.custom_scale)
+            face_detector_NCNN_->setScale(pipeline_config.custom_scale);
+        else
+            face_detector_NCNN_->setScale(pipeline_config.model_scale);
+
+        face_detector_NCNN_->setThreshold(pipeline_config_.prob_thr, pipeline_config_.nms_thr);
+
+        int ret = face_detector_NCNN_->Load(pipeline_config.model_path);
         if (ret < 0) {
             return -1;
+        }
+
+        if (pipeline_config_.face_upsample) {
+            face_up_NCNN_ = new RealESRGAN();
+
+            std::wstringstream str_param;
+            str_param << pipeline_config_.fc_up_model << ".param" << std::ends;
+            std::wstringstream str_bin;
+            str_bin << pipeline_config_.fc_up_model << ".bin" << std::ends;
+            face_up_NCNN_->load(str_param.view().data(), str_bin.view().data());
         }
 
         return 0;
@@ -176,16 +211,6 @@ namespace wsdsb {
 
         //// 7. Blob уже имеет размерность батча (N=1), поэтому дополнительных действий не требуется.
         return blob;
-        //cv::Mat processed;
-        //inputImage.convertTo(processed, CV_32FC3, 1.0 / 255.0);// [0, 1]
-        //processed = (processed - 0.5) / 0.5;              // -> [-1, 1]
-
-        //// Перестановка каналов HWC -> CHW
-        //std::vector<cv::Mat> channels(3);
-        //cv::split(processed, channels);
-        //for (auto &c: channels) c = c.reshape(1, 1);
-        //cv::hconcat(channels, processed);
-        //return processed.reshape(1, {1, 3, inputImage.rows, inputImage.cols});
     }
 
     // Функция postProcessImage преобразует выходной тензор модели в cv::Mat.
@@ -358,10 +383,79 @@ namespace wsdsb {
         //        ChannelOrder::RGB);
     }
 
+    static void RunModel(
+            const std::filesystem::path &modelPath,
+            const std::filesystem::path &imagePath,
+            PipelineConfig_t &pipe) {
+        // DML execution provider prefers these session options.
+        Ort::SessionOptions sessionOptions;
+        sessionOptions.DisableMemPattern();
+        sessionOptions.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+
+        // By passing in an explicitly created DML device & queue, the DML execution provider sends work
+        // to the desired device. If not used, the DML execution provider will create its own device & queue.
+        const OrtApi &ortApi = Ort::GetApi();
+
+#if defined(_WIN32)
+        auto [dmlDevice, d3dQueue] = CreateDmlDeviceAndCommandQueue("");
+        const OrtDmlApi *ortDmlApi = nullptr;
+        Ort::ThrowOnError(ortApi.GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void **>(&ortDmlApi)));
+        Ort::ThrowOnError(ortDmlApi->SessionOptionsAppendExecutionProvider_DML1(
+                sessionOptions,
+                dmlDevice.Get(),
+                d3dQueue.Get()));
+#else if defined(__linux__)
+        Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0));
+#endif
+
+        // Load ONNX model into a session.
+        Ort::Env env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "UPS_GAN");
+        Ort::Session ortSession(env, modelPath.wstring().c_str(), sessionOptions);
+
+        Ort::AllocatorWithDefaultOptions ortAllocator;
+
+        auto inputName = ortSession.GetInputNameAllocated(0, ortAllocator);
+        auto inputTypeInfo = ortSession.GetInputTypeInfo(0);
+        auto inputTensorInfo = inputTypeInfo.GetTensorTypeAndShapeInfo();
+        auto inputShape = inputTensorInfo.GetShape();
+
+        auto outputName = ortSession.GetOutputNameAllocated(0, ortAllocator);
+        auto outputTypeInfo = ortSession.GetOutputTypeInfo(0);
+        auto outputTensorInfo = outputTypeInfo.GetTensorTypeAndShapeInfo();
+        auto outputShape = outputTensorInfo.GetShape();
+
+        cv::Mat img = cv::imread(imagePath.string().c_str(), 1);
+        cv::Mat imgp = preprocessImage(img);
+        float inputTensorSize = 1;
+        for (auto dim: inputShape) {
+            inputTensorSize *= static_cast<float>(dim);
+        }
+        // For simplicity, this sample binds input/output buffers in system memory instead of DirectX resources.
+        Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        auto imageTensor = Ort::Value::CreateTensor<float>(
+                memoryInfo,
+                (float *) imgp.data,
+                inputTensorSize,
+                inputShape.data(),
+                inputShape.size());
+
+        auto bindings = Ort::IoBinding::IoBinding(ortSession);
+
+        bindings.BindInput(inputName.get(), imageTensor);
+        bindings.BindOutput(outputName.get(), memoryInfo);
+
+        // Run the session to get inference results.
+        Ort::RunOptions runOpts;
+        ortSession.Run(runOpts, bindings);
+        bindings.SynchronizeOutputs();
+
+        cv::imwrite("output.png", postProcessImage((float *) bindings.GetOutputValues()[0].GetTensorRawData(), outputShape));
+    }
+
     int PipeLine::Apply(const cv::Mat &input_img, cv::Mat &output_img) {
         PipeResult_t pipe_result;
         fprintf(stderr, "Detecting faces...\n");
-        face_detector_->Process(input_img, (void *) &pipe_result);
+        face_detector_NCNN_->Process(input_img, (void *) &pipe_result);
         fprintf(stderr, "Detected %d faces\n", pipe_result.face_count);
 
         char d[_MAX_PATH];
@@ -369,51 +463,55 @@ namespace wsdsb {
         *strrchr(d, ',') = '.';
 
         for (int i = 0; i != pipe_result.face_count; ++i) {
-            fprintf(stderr, "Codeformer process %d face...\n", i + 1);
-            std::stringstream str3;
-            str3 << pipeline_config_.name << "_" << i + 1 << "_" << pipeline_config_.w << "_codeformer_crop.png" << std::ends;
-            std::stringstream str;
-            str << pipeline_config_.name << "_" << i + 1 << "_crop.png" << std::ends;
-            cv::imwrite(str.view().data(), pipe_result.object[i].trans_img);
+            if (pipeline_config_.codeformer) {
+                fprintf(stderr, "Codeformer process %d face...\n", i + 1);
+                std::stringstream str3;
+                str3 << pipeline_config_.name << "_" << i + 1 << "_" << pipeline_config_.w << "_codeformer_crop.png" << std::ends;
+                std::stringstream str;
+                str << pipeline_config_.name << "_" << i + 1 << "_crop.png" << std::ends;
+                cv::imwrite(str.view().data(), pipe_result.object[i].trans_img);
+                if (pipeline_config_.onnx) {
+                    RunCodeformerModel(
+                            "./models/codeformer_0_1_0.onnx",
+                            str.view().data(), pipeline_config_);
+                    cv::Mat restored_face = cv::imread("output.png", 1);
+                    cv::imwrite(str3.view().data(), restored_face);
+                    fprintf(stderr, "Paste %d face in photo...\n", i + 1);
+                    paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img,
+                                               pipeline_config_);
+                }
+                if (pipeline_config_.ncnn) {
+                    codeformer_NCNN_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
+                    cv::imwrite(str3.view().data(), pipe_result.codeformer_result[i].restored_face);
+                    fprintf(stderr, "Paste %d face in photo...\n", i + 1);
+                    paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img,
+                                               pipeline_config_);
+                }
+            } else {
+                fprintf(stderr, "%s process %d face...\n", getfilea((char *) pipeline_config_.face_model.c_str()), i + 1);
+                std::stringstream str3;
+                str3 << pipeline_config_.name << "_" << i + 1 << "_" << getfilea((char *) pipeline_config_.face_model.c_str()) << "_crop.png" << std::ends;
+                std::stringstream str;
+                str << pipeline_config_.name << "_" << i + 1 << "_crop.png" << std::ends;
+                if (pipeline_config_.onnx) {
+                    RunModel(
+                            pipeline_config_.face_model,
+                            str.view().data(), pipeline_config_);
+                    cv::Mat restored_face = cv::imread("output.png", 1);
+                    cv::imwrite(str3.view().data(), restored_face);
+                    fprintf(stderr, "Paste %d face in photo...\n", i + 1);
+                    paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img,
+                                               pipeline_config_);
+                }
+                if (pipeline_config_.ncnn) {
+                    ncnn::Mat gfpgan_result;
+                    gfpgan_NCNN_->process(pipe_result.object[i].trans_img, gfpgan_result);
 
-            if (pipeline_config_.onnx) {
-                RunCodeformerModel(
-                        "./models/codeformer_0_1_0.onnx",
-                        str.view().data(), pipeline_config_);
-                cv::Mat restored_face = cv::imread("output.png", 1);
-                cv::imwrite(str3.view().data(), restored_face);
-                fprintf(stderr, "Paste %d face in photo...\n", i + 1);
-                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img,
-                                           pipeline_config_);
-            }
-            if (pipeline_config_.ncnn) {
-                codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
-                cv::imwrite(str3.view().data(), pipe_result.codeformer_result[i].restored_face);
-                fprintf(stderr, "Paste %d face in photo...\n", i + 1);
-                paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img,
-                                           pipeline_config_);
-                //codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
-
-                //std::stringstream str;
-                //str << pipeline_config_.name << "_" << i + 1 << "_crop.png" << std::ends;
-                //cv::imwrite(str.view().data(), pipe_result.object[i].trans_img);
-                //std::stringstream str3;
-                //str3 << pipeline_config_.name << "_" << i + 1 << "_" << pipeline_config_.w << "_codeformer_crop.png" << std::ends;
-                ////codeformer_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
-                //if (pipeline_config_.onnx) {
-
-                //    std::stringstream str2;
-                //    str2 << "python codeformer_onnx.py --model_path "
-                //         << pipeline_config_.model_path << "codeformer_0_1_0.onnx"
-                //         << " --image_path " << str.view().data() << " --w " << d << std::ends;
-                //    system(str2.view().data());
-
-                //    cv::Mat restored_face = cv::imread("output.jpg", 1);
-                //    cv::imwrite(str3.view().data(), restored_face);
-                //    fprintf(stderr, "Paste %d face in photo...\n", i + 1);
-                //    paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img,
-                //                               pipeline_config_);
-                //}
+                    cv::Mat restored_face;
+                    to_ocv(gfpgan_result, restored_face);
+                    paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img,
+                                               pipeline_config_);
+                }
             }
         }
         return 0;
