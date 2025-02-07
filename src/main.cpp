@@ -11,7 +11,7 @@
 
 #include <opencv2\core\ocl.hpp>
 
-#define VER "1.00"
+#define VER "1.01"
 
 #if _WIN32
 static wchar_t *optarg = NULL;
@@ -58,9 +58,8 @@ static void print_usage() {
     fprintf(stderr, " -c use CodeFormer face restore model\n");
     fprintf(stderr, " -d swith face restore infer to onnx\n");
     fprintf(stderr, " -w <digit> CodeFormer Fidelity (Only onnx) (default=0,7)\n");
-    fprintf(stderr, " -u FaceUpsample\n");
+    fprintf(stderr, " -u Face Upsample (after face restore)\n");
     fprintf(stderr, " -z <string> FaceUpsample model\n");
-    fprintf(stderr, " -p use gfpgan-ncnn infer instead of onnx(DirectML prefer) (only GFPGANCleanv1-NoCE-C2 model and CPU backend)\n");
     fprintf(stderr, " -n no upsample\n");
     fprintf(stderr, " -v verbose\n");
 };
@@ -89,7 +88,6 @@ int main(int argc, char **argv)
     int tilesize = 20;
     bool restore_face = false;
     bool verbose = false;
-    bool ncnn_gfp = false;
     bool use_codeformer = false;
     bool use_infer_onnx = false;
     float codeformer_fidelity = 0.7;
@@ -100,7 +98,7 @@ int main(int argc, char **argv)
 #if _WIN32
     setlocale(LC_ALL, "");
     wchar_t opt;
-    while ((opt = getopt(argc, argv, L"i:s:t:j:f:p:m:g:v:n:h:c:x:w:d:u:z")) != (wchar_t) 0) {
+    while ((opt = getopt(argc, argv, L"i:s:t:j:f:m:g:v:n:h:c:x:w:d:u:z")) != (wchar_t) 0) {
         switch (opt) {
             case L'i': {
                 imagepath = optarg;
@@ -125,9 +123,6 @@ int main(int argc, char **argv)
             } break;
             case L'v': {
                 verbose = true;
-            } break;
-            case L'p': {
-                ncnn_gfp = true;
             } break;
             case L'c': {
                 use_codeformer = true;
@@ -239,7 +234,7 @@ int main(int argc, char **argv)
         else
             fprintf(stderr, "Output image dimensions w: %d, h: %d, c: %d...\n", w * model_scale, h * model_scale, c);
 
-        fprintf(stderr, "tilesize: %d, ncnn_gfp: %d, onnx_cdf: %d, restore_face: %d,"
+        fprintf(stderr, "tilesize: %d, ncnn_inf: %d, onnx_inf: %d, restore_face: %d,"
                         " model_scale: %d, upsample: %d, use_codeformer: %d\n"
                         " gfp_model_path: %s\n"
                         " esr_model_path: %s\n"
@@ -250,7 +245,7 @@ int main(int argc, char **argv)
                         " face detect threshold: %.2f\n"
                         " OpenCV have OpenCL: %d\n"
                         " OpenCV uses OpenCL: %d\n",
-                tilesize, ncnn_gfp, use_infer_onnx, restore_face, model_scale,
+                tilesize, use_infer_onnx ? 0 : 1, use_infer_onnx, restore_face, model_scale,
                 upsample, use_codeformer, gfp_modela, esr_modela, heap_budget,
                 custom_scale, fc_up_, codeformer_fidelity, prob_face_thd, haveOpenCL, useOpenCL);
     }
@@ -262,7 +257,7 @@ int main(int argc, char **argv)
     std::wstringstream str;
     char stra[_MAX_PATH];
 
-    ////------------------------------------- upsampling image -------------------------------------
+    //------------------------------------- upsampling image -------------------------------------
     {
         if (upsample) {
             RealESRGAN real_esrgan;
