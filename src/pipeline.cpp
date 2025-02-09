@@ -11,18 +11,7 @@ extern int wic_encode_image(const wchar_t *filepath, int w, int h, int c, void *
 
 PipeLine::PipeLine() {
 }
-PipeLine::~PipeLine() {
-    if (true == pipeline_config_.ncnn)
-        if (true == pipeline_config_.codeformer)
-            delete codeformer_NCNN_;
-        else
-            delete gfpgan_NCNN_;
-
-    if (pipeline_config_.face_upsample)
-        delete face_up_NCNN_;
-
-    delete face_detector_NCNN_;
-}
+PipeLine::~PipeLine() {}
 
 static void to_ocv(const ncnn::Mat &result, cv::Mat &out) {
     cv::Mat cv_result_32F = cv::Mat::zeros(cv::Size(512, 512), CV_32FC3);
@@ -40,17 +29,24 @@ static void to_ocv(const ncnn::Mat &result, cv::Mat &out) {
     cv_result_8U.copyTo(out);
 };
 
-void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &trans_matrix_inv, cv::Mat &bg_upsample, PipelineConfig_t &pipe) {
-    trans_matrix_inv.at<double>(0, 2) += (double) pipe.model_scale;
-    trans_matrix_inv.at<double>(1, 2) += (double) pipe.model_scale;
+void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &trans_matrix_inv, cv::Mat &bg_upsample) {
+
+    if (pipe.custom_scale) {
+        trans_matrix_inv.at<double>(0, 2) += (double) pipe.custom_scale / 2;
+        trans_matrix_inv.at<double>(1, 2) += (double) pipe.custom_scale / 2;
+    } else {
+        trans_matrix_inv.at<double>(0, 2) += (double) pipe.model_scale / 2;
+        trans_matrix_inv.at<double>(1, 2) += (double) pipe.model_scale / 2;
+    }
+
     cv::Mat upscaled_face;
     double ups_f = 0.0;
     if (pipe.face_upsample && !pipe.fc_up_model.empty()) {
         ups_f = 4.0;
         fprintf(stderr, "Upsample face start...\n");
-        face_up_NCNN_->scale = 4;
-        face_up_NCNN_->prepadding = 10;
-        face_up_NCNN_->tilesize = 200;
+        face_up_NCNN_.scale = 4;
+        face_up_NCNN_.prepadding = 10;
+        face_up_NCNN_.tilesize = 200;
 
         int w{}, h{}, c{};
 #if defined(_WIN32)
@@ -61,13 +57,13 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
         ncnn::Mat bg_upsamplencnn(w * 4, h * 4, (size_t) c, c);
         std::wstringstream str_param1;
         str_param1 << "out.png" << std::ends;
-        face_up_NCNN_->process(bg_presample, bg_upsamplencnn);
+        face_up_NCNN_.process(bg_presample, bg_upsamplencnn);
 #if defined(_WIN32)
         wic_encode_image(str_param1.view().data(), w * 4, h * 4, 3, bg_upsamplencnn.data);
 #else
 #endif
 
-        upscaled_face = cv::imread("out.png", 1);
+        upscaled_face = cv::imread("out.png", cv::ImreadModes::IMREAD_COLOR_BGR);
 
         trans_matrix_inv /= ups_f;
         trans_matrix_inv.at<double>(0, 2) *= ups_f;
@@ -80,9 +76,11 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
 
     cv::Mat inv_restored;
     if (pipe.face_upsample)
-        cv::warpAffine(upscaled_face, inv_restored, trans_matrix_inv, bg_upsample.size(), 1, 0);
+        cv::warpAffine(upscaled_face, inv_restored, trans_matrix_inv, bg_upsample.size(),
+                       cv::InterpolationFlags::INTER_LINEAR, cv::BorderTypes::BORDER_CONSTANT);
     else
-        cv::warpAffine(restored_face, inv_restored, trans_matrix_inv, bg_upsample.size(), 1, 0);
+        cv::warpAffine(restored_face, inv_restored, trans_matrix_inv, bg_upsample.size(),
+                       cv::InterpolationFlags::INTER_LINEAR, cv::BorderTypes::BORDER_CONSTANT);
 
     cv::Size ms_size;
 
@@ -93,7 +91,8 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
 
     cv::Mat mask = cv::Mat::ones(ms_size, CV_8UC1) * 255;
     cv::Mat inv_mask;
-    cv::warpAffine(mask, inv_mask, trans_matrix_inv, bg_upsample.size(), 1, 0);
+    cv::warpAffine(mask, inv_mask, trans_matrix_inv, bg_upsample.size(),
+                   cv::InterpolationFlags::INTER_LINEAR, cv::BorderTypes::BORDER_CONSTANT);
 
 
     cv::Size krn_size;
@@ -103,7 +102,7 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
         krn_size = cv::Size(4, 4);
 
     cv::Mat inv_mask_erosion;
-    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, krn_size);
+    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, krn_size);
     cv::erode(inv_mask, inv_mask_erosion, kernel);
     cv::Mat pasted_face;
     cv::bitwise_and(inv_restored, inv_restored, pasted_face, inv_mask_erosion);
@@ -117,7 +116,8 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
 
     int blur_size = w_edge * 2;
     cv::Mat inv_soft_mask;
-    cv::GaussianBlur(inv_mask_center, inv_soft_mask, cv::Size(blur_size + 1, blur_size + 1), 0, 0, 4);
+    cv::GaussianBlur(inv_mask_center, inv_soft_mask, cv::Size(blur_size + 1, blur_size + 1),
+                     0, 0, cv::BorderTypes::BORDER_DEFAULT);
 
     cv::Mat inv_soft_mask_f;
     inv_soft_mask.convertTo(inv_soft_mask_f, CV_32F, 1 / 255.f, 0.f);
@@ -137,46 +137,39 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
 
 
 int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
-    pipeline_config_ = pipeline_config;
+    pipe = pipeline_config;
 
     if (true == pipeline_config.ncnn) {
-        if (pipeline_config_.codeformer) {
-            codeformer_NCNN_ = new CodeFormer();
-            int ret = codeformer_NCNN_->Load(pipeline_config_.model_path);
+        if (pipe.codeformer) {
+            int ret = codeformer_NCNN_.Load(pipe.model_path);
             if (ret < 0) {
                 return -1;
             }
         } else {
-            gfpgan_NCNN_ = new GFPGAN();
-            fprintf(stderr, "Loading GFPGANv1 face detector model from /models/GFPGANCleanv1-NoCE-C2-*...\n");
-            gfpgan_NCNN_->load("./models/GFPGANCleanv1-NoCE-C2-encoder.param",
-                               "./models/GFPGANCleanv1-NoCE-C2-encoder.bin", "./models/GFPGANCleanv1-NoCE-C2-style.bin");
-            fprintf(stderr, "Loading GFPGAN model finished...\n");
+            fprintf(stderr, "Loading GFPGANCleanv1-NoCE-C2 model from /models/GFPGANCleanv1-NoCE-C2-*...\n");
+            gfpgan_NCNN_.load(pipe.model_path);
+            fprintf(stderr, "Loading GFPGANCleanv1-NoCE-C2 model finished...\n");
         }
     }
 
-    face_detector_NCNN_ = new Face();
-
-    if (pipeline_config.custom_scale)
-        face_detector_NCNN_->setScale(pipeline_config.custom_scale);
+    if (pipe.custom_scale)
+        face_detector_NCNN_.setScale(pipe.custom_scale);
     else
-        face_detector_NCNN_->setScale(pipeline_config.model_scale);
+        face_detector_NCNN_.setScale(pipe.model_scale);
 
-    face_detector_NCNN_->setThreshold(pipeline_config_.prob_thr, pipeline_config_.nms_thr);
+    face_detector_NCNN_.setThreshold(pipe.prob_thr, pipe.nms_thr);
 
-    int ret = face_detector_NCNN_->Load(pipeline_config.model_path);
+    int ret = face_detector_NCNN_.Load(pipe.model_path);
     if (ret < 0) {
         return -1;
     }
 
-    if (pipeline_config_.face_upsample) {
-        face_up_NCNN_ = new RealESRGAN();
-
+    if (pipe.face_upsample) {
         std::wstringstream str_param;
-        str_param << pipeline_config_.fc_up_model << ".param" << std::ends;
+        str_param << pipe.fc_up_model << ".param" << std::ends;
         std::wstringstream str_bin;
-        str_bin << pipeline_config_.fc_up_model << ".bin" << std::ends;
-        face_up_NCNN_->load(str_param.view().data(), str_bin.view().data());
+        str_bin << pipe.fc_up_model << ".bin" << std::ends;
+        face_up_NCNN_.load(str_param.view().data(), str_bin.view().data());
     }
 
     return 0;
@@ -257,20 +250,21 @@ cv::Mat postProcessImage(const float *outputData, const std::vector<int64_t> &ou
     return image;
 }
 
-static void RunCodeformerModel(
+static void RunModel(
         const std::filesystem::path &modelPath,
         const std::filesystem::path &imagePath,
         PipelineConfig_t &pipe) {
-    // DML execution provider prefers these session options.
-    Ort::SessionOptions sessionOptions;
-    sessionOptions.DisableMemPattern();
-    sessionOptions.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
 
-    // By passing in an explicitly created DML device & queue, the DML execution provider sends work
-    // to the desired device. If not used, the DML execution provider will create its own device & queue.
+    Ort::SessionOptions sessionOptions;
+
     const OrtApi &ortApi = Ort::GetApi();
 
 #if defined(_WIN32)
+    // DML execution provider prefers these session options.
+    sessionOptions.DisableMemPattern();
+    sessionOptions.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+    // By passing in an explicitly created DML device & queue, the DML execution provider sends work
+    // to the desired device. If not used, the DML execution provider will create its own device & queue.
     auto [dmlDevice, d3dQueue] = CreateDmlDeviceAndCommandQueue("");
     const OrtDmlApi *ortDmlApi = nullptr;
     Ort::ThrowOnError(ortApi.GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void **>(&ortDmlApi)));
@@ -289,33 +283,16 @@ static void RunCodeformerModel(
     Ort::AllocatorWithDefaultOptions ortAllocator;
 
     auto inputName = ortSession.GetInputNameAllocated(0, ortAllocator);
-    auto fidelityName = ortSession.GetInputNameAllocated(1, ortAllocator);
     auto inputTypeInfo = ortSession.GetInputTypeInfo(0);
     auto inputTensorInfo = inputTypeInfo.GetTensorTypeAndShapeInfo();
     auto inputShape = inputTensorInfo.GetShape();
-    //auto inputDataType = inputTensorInfo.GetElementType();
-
-    /*const uint32_t inputChannels = inputShape[inputShape.size() - 3];
-        const uint32_t inputHeight = inputShape[inputShape.size() - 2];
-        const uint32_t inputWidth = inputShape[inputShape.size() - 1];
-        const uint32_t inputElementSize = inputDataType == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ? sizeof(float) : sizeof(uint16_t);*/
 
     auto outputName = ortSession.GetOutputNameAllocated(0, ortAllocator);
     auto outputTypeInfo = ortSession.GetOutputTypeInfo(0);
     auto outputTensorInfo = outputTypeInfo.GetTensorTypeAndShapeInfo();
     auto outputShape = outputTensorInfo.GetShape();
-    //auto outputDataType = outputTensorInfo.GetElementType();
 
-    /*const uint32_t outputChannels = outputShape[outputShape.size() - 3];
-        const uint32_t outputHeight = outputShape[outputShape.size() - 2];
-        const uint32_t outputWidth = outputShape[outputShape.size() - 1];
-        const uint32_t outputElementSize = outputDataType == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ? sizeof(float) : sizeof(uint16_t);*/
-
-    // Load image and transform it into an NCHW tensor with the correct shape and data type.
-    // std::vector<std::byte> inputBuffer(inputChannels * inputHeight * inputWidth * inputElementSize);
-    //FillNCHWBufferFromImageFilename(imagePath.wstring(), inputBuffer, inputHeight, inputWidth, inputDataType, ChannelOrder::RGB);
-
-    cv::Mat img = cv::imread(imagePath.string().c_str(), 1);
+    cv::Mat img = cv::imread(imagePath.string().c_str(), cv::ImreadModes::IMREAD_COLOR_BGR);
     cv::Mat imgp = preprocessImage(img);
     float inputTensorSize = 1;
     for (auto dim: inputShape) {
@@ -330,114 +307,23 @@ static void RunCodeformerModel(
             inputShape.data(),
             inputShape.size());
 
-    /*auto imageTensor = Ort::Value::CreateTensor(
+    auto bindings = Ort::IoBinding::IoBinding(ortSession);
+
+    if (pipe.codeformer) {
+        // ===== Создаём второй входной тензор (fidelity) =====
+        // Форма для fidelity – одномерный тензор с одним элементом.
+        std::array<int64_t, 1> fidelityShape = {1};
+        std::vector<double> fidelityValue{pipe.w};
+        auto fidelityTensor = Ort::Value::CreateTensor(
                 memoryInfo,
-                inputBuffer.data(),
-                inputBuffer.size(),
-                inputShape.data(),
-                inputShape.size(), inputDataType);*/
-
-    auto bindings = Ort::IoBinding::IoBinding(ortSession);
-
-    // ===== Создаём второй входной тензор (fidelity) =====
-    // Форма для fidelity – одномерный тензор с одним элементом.
-    std::array<int64_t, 1> fidelityShape = {1};
-    std::vector<double> fidelityValue{pipe.w};
-    auto fidelityTensor = Ort::Value::CreateTensor(
-            memoryInfo,
-            fidelityValue.data(),
-            fidelityValue.size() * sizeof(double),
-            fidelityShape.data(),
-            fidelityShape.size(),
-            ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE);
-
-    //auto logitsName = ortSession.GetOutputNameAllocated(1, ortAllocator);
-    //auto lqFeatName = ortSession.GetOutputNameAllocated(2, ortAllocator);
-
-    bindings.BindInput(inputName.get(), imageTensor);
-    bindings.BindInput(fidelityName.get(), fidelityTensor);
-    bindings.BindOutput(outputName.get(), memoryInfo);
-    //bindings.BindOutput(logitsName.get(), memoryInfo);
-    //bindings.BindOutput(lqFeatName.get(), memoryInfo);
-
-    // Run the session to get inference results.
-    Ort::RunOptions runOpts;
-    ortSession.Run(runOpts, bindings);
-    bindings.SynchronizeOutputs();
-
-    cv::imwrite("output.png", postProcessImage((float *) bindings.GetOutputValues()[0].GetTensorRawData(), outputShape));
-
-    //std::span<const std::byte> outputBuffer(
-    //        reinterpret_cast<const std::byte *>(bindings.GetOutputValues()[0].GetTensorRawData()),
-    //        outputChannels * outputHeight * outputWidth * outputElementSize);
-
-    //std::cout << "Saving inference results to output.png" << std::endl;
-    //SaveNCHWBufferToImageFilename(
-    //        L"output.png",
-    //        outputBuffer,
-    //        outputHeight,
-    //        outputWidth,
-    //        outputDataType,
-    //        ChannelOrder::RGB);
-}
-
-static void RunModel(
-        const std::filesystem::path &modelPath,
-        const std::filesystem::path &imagePath,
-        PipelineConfig_t &pipe) {
-    // DML execution provider prefers these session options.
-    Ort::SessionOptions sessionOptions;
-    sessionOptions.DisableMemPattern();
-    sessionOptions.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
-
-    // By passing in an explicitly created DML device & queue, the DML execution provider sends work
-    // to the desired device. If not used, the DML execution provider will create its own device & queue.
-    const OrtApi &ortApi = Ort::GetApi();
-
-#if defined(_WIN32)
-    auto [dmlDevice, d3dQueue] = CreateDmlDeviceAndCommandQueue("");
-    const OrtDmlApi *ortDmlApi = nullptr;
-    Ort::ThrowOnError(ortApi.GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void **>(&ortDmlApi)));
-    Ort::ThrowOnError(ortDmlApi->SessionOptionsAppendExecutionProvider_DML1(
-            sessionOptions,
-            dmlDevice.Get(),
-            d3dQueue.Get()));
-#else if defined(__linux__)
-    Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0));
-#endif
-
-    // Load ONNX model into a session.
-    Ort::Env env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "UPS_GAN");
-    Ort::Session ortSession(env, modelPath.wstring().c_str(), sessionOptions);
-
-    Ort::AllocatorWithDefaultOptions ortAllocator;
-
-    auto inputName = ortSession.GetInputNameAllocated(0, ortAllocator);
-    auto inputTypeInfo = ortSession.GetInputTypeInfo(0);
-    auto inputTensorInfo = inputTypeInfo.GetTensorTypeAndShapeInfo();
-    auto inputShape = inputTensorInfo.GetShape();
-
-    auto outputName = ortSession.GetOutputNameAllocated(0, ortAllocator);
-    auto outputTypeInfo = ortSession.GetOutputTypeInfo(0);
-    auto outputTensorInfo = outputTypeInfo.GetTensorTypeAndShapeInfo();
-    auto outputShape = outputTensorInfo.GetShape();
-
-    cv::Mat img = cv::imread(imagePath.string().c_str(), 1);
-    cv::Mat imgp = preprocessImage(img);
-    float inputTensorSize = 1;
-    for (auto dim: inputShape) {
-        inputTensorSize *= static_cast<float>(dim);
+                fidelityValue.data(),
+                fidelityValue.size() * sizeof(double),
+                fidelityShape.data(),
+                fidelityShape.size(),
+                ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE);
+        auto fidelityName = ortSession.GetInputNameAllocated(1, ortAllocator);
+        bindings.BindInput(fidelityName.get(), fidelityTensor);
     }
-    // For simplicity, this sample binds input/output buffers in system memory instead of DirectX resources.
-    Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-    auto imageTensor = Ort::Value::CreateTensor<float>(
-            memoryInfo,
-            (float *) imgp.data,
-            inputTensorSize,
-            inputShape.data(),
-            inputShape.size());
-
-    auto bindings = Ort::IoBinding::IoBinding(ortSession);
 
     bindings.BindInput(inputName.get(), imageTensor);
     bindings.BindOutput(outputName.get(), memoryInfo);
@@ -453,66 +339,70 @@ static void RunModel(
 int PipeLine::Apply(const cv::Mat &input_img, cv::Mat &output_img) {
     PipeResult_t pipe_result;
     fprintf(stderr, "Detecting faces...\n");
-    face_detector_NCNN_->Process(input_img, (void *) &pipe_result);
+    face_detector_NCNN_.Process(input_img, (void *) &pipe_result);
     fprintf(stderr, "Detected %d faces\n", pipe_result.face_count);
 
     char d[_MAX_PATH];
-    sprintf(d, "%.1f", pipeline_config_.w);
+    sprintf(d, "%.1f", pipe.w);
     *strrchr(d, ',') = '.';
 
     for (int i = 0; i != pipe_result.face_count; ++i) {
-        if (pipeline_config_.codeformer) {
+        std::stringstream str;
+        str << pipe.name << "_" << i + 1 << "_crop.png" << std::ends;
+        cv::imwrite(str.view().data(), pipe_result.object[i].trans_img);
+        if (pipe.codeformer) {
             fprintf(stderr, "Codeformer process %d face...\n", i + 1);
             std::stringstream str3;
-            str3 << pipeline_config_.name << "_" << i + 1 << "_" << pipeline_config_.w << "_codeformer_crop.png" << std::ends;
-            std::stringstream str;
-            str << pipeline_config_.name << "_" << i + 1 << "_crop.png" << std::ends;
-            cv::imwrite(str.view().data(), pipe_result.object[i].trans_img);
-            if (pipeline_config_.onnx) {
-                RunCodeformerModel(
+            str3 << pipe.name << "_" << i + 1 << "_" << pipe.w << "_codeformer_crop.png" << std::ends;
+
+            if (pipe.onnx) {
+                RunModel(
                         "./models/codeformer_0_1_0.onnx",
-                        str.view().data(), pipeline_config_);
-                cv::Mat restored_face = cv::imread("output.png", 1);
+                        str.view().data(), pipe);
+                cv::Mat restored_face = cv::imread("output.png", cv::ImreadModes::IMREAD_COLOR_BGR);
                 cv::imwrite(str3.view().data(), restored_face);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
-                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img,
-                                           pipeline_config_);
+                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img);
             }
-            if (pipeline_config_.ncnn) {
+            if (pipe.ncnn) {
                 CodeFormerResult_t res;
                 pipe_result.codeformer_result.push_back(res);
-                codeformer_NCNN_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
+                codeformer_NCNN_.Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
                 cv::imwrite(str3.view().data(), pipe_result.codeformer_result[i].restored_face);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
-                paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img,
-                                           pipeline_config_);
+                paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, output_img);
             }
         } else {
-            fprintf(stderr, "%s process %d face...\n", getfilea((char *) pipeline_config_.face_model.c_str()), i + 1);
+            fprintf(stderr, "%s process %d face...\n", getfilea((char *) pipe.face_model.c_str()), i + 1);
             std::stringstream str3;
-            str3 << pipeline_config_.name << "_" << i + 1 << "_" << getfilea((char *) pipeline_config_.face_model.c_str()) << "_crop.png" << std::ends;
-            std::stringstream str;
-            str << pipeline_config_.name << "_" << i + 1 << "_crop.png" << std::ends;
-            if (pipeline_config_.onnx) {
+            str3 << pipe.name << "_" << i + 1 << "_" << getfilea((char *) pipe.face_model.c_str()) << "_crop.png" << std::ends;
+            if (pipe.onnx) {
                 RunModel(
-                        pipeline_config_.face_model,
-                        str.view().data(), pipeline_config_);
-                cv::Mat restored_face = cv::imread("output.png", 1);
+                        pipe.face_model,
+                        str.view().data(), pipe);
+                cv::Mat restored_face = cv::imread("output.png", cv::ImreadModes::IMREAD_COLOR_BGR);
                 cv::imwrite(str3.view().data(), restored_face);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
-                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img,
-                                           pipeline_config_);
+                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img);
             }
-            if (pipeline_config_.ncnn) {
+            if (pipe.ncnn) {
                 ncnn::Mat gfpgan_result;
-                gfpgan_NCNN_->process(pipe_result.object[i].trans_img, gfpgan_result);
+                gfpgan_NCNN_.process(pipe_result.object[i].trans_img, gfpgan_result);
 
                 cv::Mat restored_face;
                 to_ocv(gfpgan_result, restored_face);
-                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img,
-                                           pipeline_config_);
+                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, output_img);
             }
         }
     }
     return 0;
 }
+
+//void onnxContext::init(const std::filesystem::path &modelPath) {
+//}
+//
+//void onnxContext::RunModel(const std::filesystem::path &imagePath, PipelineConfig_t &pipe) {
+//}
+//
+//void onnxContext::RunCodeformerModel(const std::filesystem::path &imagePath, PipelineConfig_t &pipe) {
+//}

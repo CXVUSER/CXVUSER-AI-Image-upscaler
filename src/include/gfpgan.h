@@ -90,7 +90,7 @@ public:
     GFPGAN();
     ~GFPGAN();
 
-    int load(const std::string& param_path, const std::string& model_path, const std::string& style_path);
+    int load(const std::string& path);
 
     int process(const cv::Mat& img, ncnn::Mat& outimage);
 

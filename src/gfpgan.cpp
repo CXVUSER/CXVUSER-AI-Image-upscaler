@@ -498,7 +498,12 @@ int GFPGAN::load_weights(const char *model_path, std::vector<StyleConvWeights> &
     return 0;
 }
 
-int GFPGAN::load(const std::string &param_path, const std::string &model_path, const std::string &style_path) {
+int GFPGAN::load(const std::string &path) {
+
+    std::string param_path = path + "/GFPGANCleanv1-NoCE-C2-encoder.param";
+    std::string model_path = path + "/GFPGANCleanv1-NoCE-C2-encoder.bin";
+    std::string style_path = path + "/GFPGANCleanv1-NoCE-C2-style.bin";
+
     int ret = net.load_param(param_path.c_str());
     if (ret < 0) {
         fprintf(stderr, "open param file %s failed\n", param_path.c_str());

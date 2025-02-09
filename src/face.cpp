@@ -285,7 +285,6 @@ void Face::PreProcess(const void* input_data, std::vector<Tensor_t>& input_tenso
     tensor_t.in_w = in_pad.w;
     tensor_t.scale = scale;
     input_tensor.push_back(tensor_t);
-
 }
 
 void Face::Run(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor)
@@ -309,15 +308,16 @@ void Face::AlignFace(const cv::Mat& img, Object_t& object)
     cv::Mat affine_matrix = cv::estimateAffinePartial2D(object.pts, face_template,cv::noArray(), cv::LMEDS);
 
     cv::Mat cropped_face;
-    cv::warpAffine(img, cropped_face, affine_matrix, cv::Size(512, 512), 1, cv::BORDER_CONSTANT, cv::Scalar(135, 133, 132));
+    cv::warpAffine(img, cropped_face, affine_matrix, cv::Size(512, 512), 
+        cv::InterpolationFlags::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(135, 133, 132));
 
     cv::Mat affine_matrix_inv;
     cv::invertAffineTransform(affine_matrix, affine_matrix_inv);
     affine_matrix_inv *= scale;
     affine_matrix_inv.copyTo(object.trans_inv);
     cropped_face.copyTo(object.trans_img);
-
 }
+
 void Face::PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor, void* result)
 {
     std::vector<Object_t> proposals;
@@ -407,7 +407,6 @@ void Face::PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Te
         ((PipeResult_t*)result)->object[i].rect.width = x1 - x0;
         ((PipeResult_t*)result)->object[i].rect.height = y1 - y0;
     }
-    
 }
 
 int Face::Process(const cv::Mat& input_img, void* result)
@@ -424,19 +423,18 @@ int Face::Process(const cv::Mat& input_img, void* result)
     {
         AlignFace(input_img, ((PipeResult_t*)result)->object[i]);
     }
-    
+
+    //this->draw_objects(input_img, ((PipeResult_t *) result)->object);
     return 0;
 }
 
 void Face::draw_objects(const cv::Mat& bgr, const std::vector<Object_t>& objects)
 {
-
     cv::Mat image = bgr.clone();
 
     for (size_t i = 0; i < objects.size(); i++)
     {
         const Object_t& obj = objects[i];
-
 
         cv::circle(image, obj.pts[0], 2, cv::Scalar(0, 0, 255), -1);
         cv::circle(image, obj.pts[1], 2, cv::Scalar(0, 255, 0), -1);
@@ -464,7 +462,13 @@ void Face::draw_objects(const cv::Mat& bgr, const std::vector<Object_t>& objects
         cv::putText(image, text, cv::Point(x, y + label_size.height),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
     }
-
-    cv::imshow("image", image);
-    cv::waitKey();
+    if (image.cols <= 400 || image.rows <= 400) {
+        cv::Mat r_image;
+        cv::resize(image, r_image, cv::Size(image.cols * 4, image.rows * 4), 0, 0, 1);
+        cv::imshow("image", r_image);
+        cv::waitKey();
+    } else {
+        cv::imshow("image", image);
+        cv::waitKey();
+    }
 }

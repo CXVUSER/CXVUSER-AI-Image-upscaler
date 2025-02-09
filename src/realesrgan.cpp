@@ -66,18 +66,27 @@ RealESRGAN::~RealESRGAN()
 {
     // cleanup preprocess and postprocess pipeline
     {
-        delete realesrgan_preproc;
-        delete realesrgan_postproc;
+        if (realesrgan_preproc)
+            delete realesrgan_preproc;
+
+        if (realesrgan_postproc)
+            delete realesrgan_postproc;
     }
 
-    bicubic_2x->destroy_pipeline(net.opt);
-    delete bicubic_2x;
+    if (bicubic_2x) {
+        bicubic_2x->destroy_pipeline(net.opt);
+        delete bicubic_2x;
+    }
 
-    bicubic_3x->destroy_pipeline(net.opt);
-    delete bicubic_3x;
+    if (bicubic_3x) {
+        bicubic_3x->destroy_pipeline(net.opt);
+        delete bicubic_3x;
+    }
 
-    bicubic_4x->destroy_pipeline(net.opt);
-    delete bicubic_4x;
+    if (bicubic_4x) {
+        bicubic_4x->destroy_pipeline(net.opt);
+        delete bicubic_4x;
+    }
 }
 
 #if _WIN32

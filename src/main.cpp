@@ -1,13 +1,13 @@
 ﻿#include "helpers.h"
 #include "pipeline.h"
 #include "realesrgan.h"
+#include "wic_image.h"
+#include <conio.h>
 #include <cstdio>
 #include <iostream>
 #include <net.h>
 #include <string>
 #include <string_view>
-
-#include "wic_image.h"
 
 #include <opencv2\core\ocl.hpp>
 
@@ -44,8 +44,8 @@ static wchar_t getopt(int argc, wchar_t *const argv[], const wchar_t *optstring)
 #endif
 
 static void print_usage() {
-    fprintf(stderr, "CXVUSER AI MegaPixel XL Super-Black edition Upscale solution " VER ", Welcam...\n\n");
-    fprintf(stderr, "This project uses (onnx,ncnn inference) with Vulkan and DirectML compute...\n");
+    fprintf(stderr, "CXVUSER AI MegaPixel XL Super-Black edition Upscale solution " VER ", Welcome...\n");
+    fprintf(stderr, "This project uses (onnx,ncnn inference) with Vulkan and DirectML compute...\n\n");
     fprintf(stderr, "Usage: this_binary [options]...\n\n");
     fprintf(stderr, " -i <img> path to image\n");
     fprintf(stderr, " -s <digit> model scale factor (default=autodetect)\n");
@@ -60,7 +60,9 @@ static void print_usage() {
     fprintf(stderr, " -w <digit> CodeFormer Fidelity (Only onnx) (default=0,7)\n");
     fprintf(stderr, " -u Face Upsample (after face restore)\n");
     fprintf(stderr, " -z <string> FaceUpsample model (ESRGAN)\n");
+    fprintf(stderr, " -o <string> override image output path");
     fprintf(stderr, " -n no upsample\n");
+    fprintf(stderr, " -a wait\n");
     fprintf(stderr, " -v verbose\n");
 };
 
@@ -78,6 +80,8 @@ int main(int argc, char **argv)
     char esr_modela[_MAX_PATH] = "./models/4xNomos8kSC";
     std::wstring gfp_model = L"./models/gfpgan_1.4.onnx";
     char gfp_modela[_MAX_PATH] = "./models/gfpgan_1.4.onnx";
+    std::wstring out_path;
+    char out_patha[_MAX_PATH];
     std::wstring fc_up_m;
     char cdf_upa[_MAX_PATH];
 
@@ -88,9 +92,10 @@ int main(int argc, char **argv)
     int tilesize = 20;
     bool restore_face = false;
     bool verbose = false;
+    bool wait = false;
     bool use_codeformer = false;
     bool use_infer_onnx = false;
-    float codeformer_fidelity = 0.7;
+    float codeformer_fidelity = 0.5;
     bool fc_up_ = false;
     float prob_face_thd = 0.5f;
     float nms_face_thd = 0.65f;
@@ -98,28 +103,36 @@ int main(int argc, char **argv)
 #if _WIN32
     setlocale(LC_ALL, "");
     wchar_t opt;
-    while ((opt = getopt(argc, argv, L"i:s:t:j:f:m:g:v:n:h:c:x:w:d:u:z")) != (wchar_t) 0) {
+    while ((opt = getopt(argc, argv, L"i:s:t:j:f:m:g:v:n:c:x:w:d:u:z:o:a")) != (wchar_t) 0) {
         switch (opt) {
             case L'i': {
-                imagepath = optarg;
-                wcstombs(imagepatha, imagepath.data(), _MAX_PATH);
+                if (optarg) {
+                    imagepath = optarg;
+                    wcstombs(imagepatha, imagepath.data(), _MAX_PATH);
+                }
             } break;
             case L's': {
-                model_scale = _wtoi(optarg);
+                if (optarg)
+                    model_scale = _wtoi(optarg);
             } break;
             case L't': {
-                tilesize = _wtoi(optarg);
+                if (optarg)
+                    tilesize = _wtoi(optarg);
             } break;
             case L'f': {
                 restore_face = true;
             } break;
             case L'm': {
-                esr_model = optarg;
-                wcstombs(esr_modela, esr_model.data(), _MAX_PATH);
+                if (optarg) {
+                    esr_model = optarg;
+                    wcstombs(esr_modela, esr_model.data(), _MAX_PATH);
+                }
             } break;
             case L'g': {
-                gfp_model = optarg;
-                wcstombs(gfp_modela, gfp_model.data(), _MAX_PATH);
+                if (optarg) {
+                    gfp_model = optarg;
+                    wcstombs(gfp_modela, gfp_model.data(), _MAX_PATH);
+                }
             } break;
             case L'v': {
                 verbose = true;
@@ -131,10 +144,12 @@ int main(int argc, char **argv)
                 use_infer_onnx = true;
             } break;
             case L'w': {
-                codeformer_fidelity = _wtof(optarg);
+                if (optarg)
+                    codeformer_fidelity = _wtof(optarg);
             } break;
             case L'x': {
-                prob_face_thd = _wtof(optarg);
+                if (optarg)
+                    prob_face_thd = _wtof(optarg);
             } break;
             case L'n': {
                 upsample = false;
@@ -142,16 +157,24 @@ int main(int argc, char **argv)
             case L'u': {
                 fc_up_ = true;
             } break;
+            case L'a': {
+                wait = true;
+            } break;
             case L'z': {
-                fc_up_m = optarg;
-                wcstombs(cdf_upa, fc_up_m.data(), _MAX_PATH);
+                if (optarg) {
+                    fc_up_m = optarg;
+                    wcstombs(cdf_upa, fc_up_m.data(), _MAX_PATH);
+                }
             } break;
             case L'j': {
-                custom_scale = _wtoi(optarg);
+                if (optarg)
+                    custom_scale = _wtoi(optarg);
             } break;
-            case L'h': {
-                print_usage();
-                return 0;
+            case L'o': {
+                if (optarg) {
+                    out_path = optarg;
+                    wcstombs(out_patha, out_path.data(), _MAX_PATH);
+                }
             } break;
             case L'?': {
                 print_usage();
@@ -163,6 +186,8 @@ int main(int argc, char **argv)
 
     if (imagepath.empty() || (false == upsample && false == restore_face)) {
         print_usage();
+        if (wait)
+            getch();
         return 0;
     }
 
@@ -189,14 +214,16 @@ int main(int argc, char **argv)
 
     int haveOpenCL{};
     int useOpenCL{};
-    if (haveOpenCL = cv::ocl::haveOpenCL())
-        cv::ocl::setUseOpenCL(true);
-    useOpenCL = cv::ocl::useOpenCL();
+    // if (haveOpenCL = cv::ocl::haveOpenCL())
+    //    cv::ocl::setUseOpenCL(true);
+    //useOpenCL = cv::ocl::useOpenCL();
 
 #if _WIN32
     pixeldata = wic_decode_image(imagepath.data(), &w, &h, &c);
     if (!pixeldata) {
         fprintf(stderr, "Failed to load image...\n");
+        if (wait)
+            getch();
         return 0;
     }
 #else
@@ -223,6 +250,8 @@ int main(int argc, char **argv)
             if (!model_scale) {
                 fprintf(stderr, "Error autodetect scale of this upscale model please override scale factor using -s flag for using this model");
                 ncnn::destroy_gpu_instance();
+                if (wait)
+                    getch();
                 return 0;
             }
         }
@@ -279,7 +308,10 @@ int main(int argc, char **argv)
             real_esrgan.process(bg_presample_ncnn, bg_upsample_ncnn);
             fprintf(stderr, "Upscale image finished...\n");
 
-            str << imagepath << L"_" << getfilew(esr_model.data()) << L"_ms" << model_scale << L"_cs" << custom_scale << ".png" << std::ends;
+            if (!out_path.empty())
+                str << out_patha << std::ends;
+            else
+                str << imagepath << L"_" << getfilew(esr_model.data()) << L"_ms" << model_scale << L"_cs" << custom_scale << ".png" << std::ends;
 
 #if _WIN32
             wic_encode_image(str.view().data(), bg_upsample_ncnn.w, bg_upsample_ncnn.h, bg_upsample_ncnn.elempack, bg_upsample_ncnn.data);
@@ -287,7 +319,7 @@ int main(int argc, char **argv)
 #endif
             wcstombs(stra, str.view().data(), _MAX_PATH);
             if (custom_scale) {
-                cv::Mat pre = cv::imread(stra, 1);
+                cv::Mat pre = cv::imread(stra, cv::ImreadModes::IMREAD_COLOR_BGR);
                 cv::Mat up;
                 cv::resize(pre, up, cv::Size(bg_presample_ocv.cols * custom_scale, bg_presample_ocv.rows * custom_scale), 0, 0, cv::InterpolationFlags::INTER_LINEAR);
                 cv::imwrite(stra, up);
@@ -297,8 +329,11 @@ int main(int argc, char **argv)
                 cv::resize(bg_presample_ocv, bg_upsample_ocv, cv::Size(bg_presample_ocv.cols * custom_scale, bg_presample_ocv.rows * custom_scale), 0, 0, cv::InterpolationFlags::INTER_LINEAR);
             else
                 bg_presample_ocv.copyTo(bg_upsample_ocv);
-            str << imagepath << L"_" << getfilew(gfp_model.data()) << L"_s" << model_scale << L"_cs" << custom_scale << "_interpolated"
-                << ".png" << std::ends;
+            if (!out_path.empty())
+                str << out_patha << std::ends;
+            else
+                str << imagepath << L"_" << getfilew(gfp_model.data()) << L"_s" << model_scale << L"_cs" << custom_scale << "_interpolated"
+                    << ".png" << std::ends;
 
 #if _WIN32
             wic_encode_image(str.view().data(), bg_upsample_ocv.cols, bg_upsample_ocv.rows, bg_upsample_ocv.elemSize(), bg_upsample_ocv.data);
@@ -312,7 +347,7 @@ int main(int argc, char **argv)
         if (true == restore_face) {
             char path[_MAX_PATH];
             wcstombs(path, str.view().data(), _MAX_PATH);
-            cv::Mat img_faces_upsamle = cv::imread(path, 1);
+            cv::Mat img_faces_upsamle = cv::imread(path, cv::ImreadModes::IMREAD_COLOR_BGR);
 
             PipelineConfig_t pipeline_config_t;
             pipeline_config_t.model_path = "./models/";
@@ -343,27 +378,31 @@ int main(int argc, char **argv)
             //------------------------------------- save result image -------------------------------------
             {
                 std::stringstream file;
-                file << imagepatha;
-                if (upsample)
-                    file << "_" << getfilea(esr_modela);
-                if (restore_face) {
-                    if (use_codeformer) {
-                        file << "_codeformer";
-                        if (use_infer_onnx) {
-                            file << "_w" << codeformer_fidelity;
-                            if (fc_up_)
-                                file << "_fu_" << getfilea(cdf_upa);
+                if (!out_path.empty()) {
+                    file << out_patha << std::ends;
+                } else {
+                    file << imagepatha;
+                    if (upsample)
+                        file << "_" << getfilea(esr_modela);
+                    if (restore_face) {
+                        if (use_codeformer) {
+                            file << "_codeformer";
+                            if (use_infer_onnx) {
+                                file << "_w" << codeformer_fidelity;
+                                if (fc_up_)
+                                    file << "_fu_" << getfilea(cdf_upa);
+                            }
+                        } else {
+                            file << "_" << getfilea(gfp_modela);
                         }
-                    } else {
-                        file << "_" << getfilea(gfp_modela);
                     }
+
+                    file << "_ms" << model_scale;
+                    if (custom_scale)
+                        file << "_cs" << custom_scale;
+
+                    file << ".png" << std::ends;
                 }
-
-                file << "_ms" << model_scale;
-                if (custom_scale)
-                    file << "_cs" << custom_scale;
-
-                file << ".png" << std::ends;
 
                 cv::imwrite(file.view().data(), img_faces_upsamle);
             }
@@ -377,6 +416,8 @@ int main(int argc, char **argv)
     ncnn::destroy_gpu_instance();
 
     fprintf(stderr, "Finish enjoy...\n");
+    if (wait)
+        getch();
 
     return 0;
 };
