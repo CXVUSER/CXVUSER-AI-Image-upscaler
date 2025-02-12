@@ -89,11 +89,59 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
     else
         ms_size = cv::Size(512, 512);
 
-    cv::Mat mask = cv::Mat::ones(ms_size, CV_8UC1) * 255;
+    cv::Mat mask;
+    if (pipe.useParse) {
+        const int target_width = 512;
+        const int target_height = 512;
+        const int num_class = 15;
+
+        ncnn::Extractor ex = parsing_net.create_extractor();
+        const float mean_vals[3] = {123.675f, 116.28f, 103.53f};
+        const float norm_vals[3] = {0.017058f, 0.017439f, 0.017361f};
+        ncnn::Mat ncnn_in = ncnn::Mat::from_pixels(restored_face.data, ncnn::Mat::PIXEL_BGR2RGB, restored_face.cols, restored_face.rows);
+
+        ncnn_in.substract_mean_normalize(mean_vals, norm_vals);
+        fprintf(stderr, "Face parsing start...\n");
+        ex.input("input", ncnn_in);
+        ncnn::Mat output;
+        ex.extract("output", output);
+
+        //cv::Mat kx(output.h,output.w, CV_32FC1, output.data);
+        //kx = (kx + 1.0f) / 2.0f * 255.0f;
+        //kx.convertTo(mask, CV_8UC1);
+        //mask.inv();
+
+        mask = cv::Mat::zeros(cv::Size(512, 512), CV_8UC1);
+        float *output_data = (float *) output.data;
+
+        int out_h = mask.rows;
+        int out_w = mask.cols;
+
+#pragma omp parallel for
+        for (int i = 0; i < out_h; i++) {
+            for (int j = 0; j < out_w; j++) {
+                int maxk = 0;
+                float tmp = output_data[0 * out_w * out_h + i * out_w + j];
+                for (int k = 0; k < num_class; k++) {
+                    if (tmp < output_data[k * out_w * out_h + i * out_w + j]) {
+                        tmp = output_data[k * out_w * out_h + i * out_w + j];
+                        maxk = 255;
+                    }
+                }
+                mask.at<uchar>(i, j) = maxk;
+            }
+        }
+        if (pipe.face_upsample)
+            cv::resize(mask, mask, ms_size, 0, 0, cv::InterpolationFlags::INTER_LINEAR);
+        fprintf(stderr, "Face parsing finished...\n");
+        //cv::imwrite("mask.png", mask);
+    } else
+        mask = cv::Mat::ones(ms_size, CV_8UC1) * 255;
+
+    //cv::Mat mask = cv::Mat::ones(ms_size, CV_8UC1) * 255;
     cv::Mat inv_mask;
     cv::warpAffine(mask, inv_mask, trans_matrix_inv, bg_upsample.size(),
                    cv::InterpolationFlags::INTER_LINEAR, cv::BorderTypes::BORDER_CONSTANT);
-
 
     cv::Size krn_size;
     if (pipe.face_upsample)
@@ -119,6 +167,8 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
     cv::GaussianBlur(inv_mask_center, inv_soft_mask, cv::Size(blur_size + 1, blur_size + 1),
                      0, 0, cv::BorderTypes::BORDER_DEFAULT);
 
+    //cv::imwrite("mask_corr.png", inv_soft_mask);
+
     cv::Mat inv_soft_mask_f;
     inv_soft_mask.convertTo(inv_soft_mask_f, CV_32F, 1 / 255.f, 0.f);
 
@@ -135,16 +185,17 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
     }
 }
 
-
 int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
     pipe = pipeline_config;
 
     if (true == pipeline_config.ncnn) {
         if (pipe.codeformer) {
+            fprintf(stderr, "Loading codeformer model...\n");
             int ret = codeformer_NCNN_.Load(pipe.model_path);
             if (ret < 0) {
                 return -1;
             }
+            fprintf(stderr, "Loading codeformer finished...\n");
         } else {
             fprintf(stderr, "Loading GFPGANCleanv1-NoCE-C2 model from /models/GFPGANCleanv1-NoCE-C2-*...\n");
             gfpgan_NCNN_.load(pipe.model_path);
@@ -152,16 +203,36 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
         }
     }
 
-    if (pipe.custom_scale)
-        face_detector_NCNN_.setScale(pipe.custom_scale);
-    else
-        face_detector_NCNN_.setScale(pipe.model_scale);
+    if (!pipe.face_det_model.empty()) {
+        if (pipe.face_det_model.find(L"y7", 0) != std::string::npos)
+            face_detector = new Faceyolov7_lite_e();
+        if (pipe.face_det_model.find(L"y5", 0) != std::string::npos)
+            face_detector = new Face_yolov5_bl();
+        if (pipe.face_det_model.find(L"rt", 0) != std::string::npos)
+            face_detector = new FaceR();
 
-    face_detector_NCNN_.setThreshold(pipe.prob_thr, pipe.nms_thr);
+        int ret = face_detector->Load(pipe.model_path);
+        if (ret < 0) {
+            return -1;
+        }
+        if (pipe.custom_scale)
+            face_detector->setScale(pipe.custom_scale);
+        else
+            face_detector->setScale(pipe.model_scale);
 
-    int ret = face_detector_NCNN_.Load(pipe.model_path);
-    if (ret < 0) {
-        return -1;
+        face_detector->setThreshold(pipe.prob_thr, pipe.nms_thr);
+    }
+
+    if (pipe.useParse) {
+        parsing_net.opt.num_threads = ncnn::get_cpu_count();
+        parsing_net.opt.use_vulkan_compute = true;
+        std::string model_param = pipe.model_path + "/face_parsing.param";
+        std::string model_bin = pipe.model_path + "/face_parsing.bin";
+
+        fprintf(stderr, "Loading face parsing model from %s...\n", model_bin.c_str());
+        int ret_param = parsing_net.load_param(model_param.c_str());
+        int ret_bin = parsing_net.load_model(model_bin.c_str());
+        fprintf(stderr, "Loading face parsing model finished...\n");
     }
 
     if (pipe.face_upsample) {
@@ -169,7 +240,9 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
         str_param << pipe.fc_up_model << ".param" << std::ends;
         std::wstringstream str_bin;
         str_bin << pipe.fc_up_model << ".bin" << std::ends;
+        fprintf(stderr, "Loading face upsample model...\n");
         face_up_NCNN_.load(str_param.view().data(), str_bin.view().data());
+        fprintf(stderr, "Loading face upsample finished...\n");
     }
 
     return 0;
@@ -250,10 +323,9 @@ cv::Mat postProcessImage(const float *outputData, const std::vector<int64_t> &ou
     return image;
 }
 
-static void RunModel(
+void PipeLine::RunModel(
         const std::filesystem::path &modelPath,
-        const std::filesystem::path &imagePath,
-        PipelineConfig_t &pipe) {
+        const std::filesystem::path &imagePath) {
 
     Ort::SessionOptions sessionOptions;
 
@@ -273,12 +345,15 @@ static void RunModel(
             dmlDevice.Get(),
             d3dQueue.Get()));
 #else if defined(__linux__)
-    Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0));
+    //Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_ROCM(sessionOptions, 0)); //AMD
+    Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0));//NVIDIA
 #endif
 
     // Load ONNX model into a session.
     Ort::Env env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "UPS_CDF");
+    fprintf(stderr, "Loading onnx %s model...\n", modelPath.generic_string().c_str());
     Ort::Session ortSession(env, modelPath.wstring().c_str(), sessionOptions);
+    fprintf(stderr, "Loading %s model finished...\n", modelPath.generic_string().c_str());
 
     Ort::AllocatorWithDefaultOptions ortAllocator;
 
@@ -330,7 +405,9 @@ static void RunModel(
 
     // Run the session to get inference results.
     Ort::RunOptions runOpts;
+    fprintf(stderr, "Processing %s model...\n", modelPath.generic_string().c_str());
     ortSession.Run(runOpts, bindings);
+    fprintf(stderr, "Processing %s model finished...\n", modelPath.generic_string().c_str());
     bindings.SynchronizeOutputs();
 
     cv::imwrite("output.png", postProcessImage((float *) bindings.GetOutputValues()[0].GetTensorRawData(), outputShape));
@@ -339,7 +416,8 @@ static void RunModel(
 int PipeLine::Apply(const cv::Mat &input_img, cv::Mat &output_img) {
     PipeResult_t pipe_result;
     fprintf(stderr, "Detecting faces...\n");
-    face_detector_NCNN_.Process(input_img, (void *) &pipe_result);
+    //face_detector_NCNN_.Process(input_img, (void *) &pipe_result);
+    face_detector->Process(input_img, (void *) &pipe_result);
     fprintf(stderr, "Detected %d faces\n", pipe_result.face_count);
 
     char d[_MAX_PATH];
@@ -349,6 +427,7 @@ int PipeLine::Apply(const cv::Mat &input_img, cv::Mat &output_img) {
     for (int i = 0; i != pipe_result.face_count; ++i) {
         std::stringstream str;
         str << pipe.name << "_" << i + 1 << "_crop.png" << std::ends;
+
         cv::imwrite(str.view().data(), pipe_result.object[i].trans_img);
         if (pipe.codeformer) {
             fprintf(stderr, "Codeformer process %d face...\n", i + 1);
@@ -357,8 +436,8 @@ int PipeLine::Apply(const cv::Mat &input_img, cv::Mat &output_img) {
 
             if (pipe.onnx) {
                 RunModel(
-                        "./models/codeformer_0_1_0.onnx",
-                        str.view().data(), pipe);
+                        pipe.model_path + "/codeformer_0_1_0.onnx",
+                        str.view().data());
                 cv::Mat restored_face = cv::imread("output.png", cv::ImreadModes::IMREAD_COLOR_BGR);
                 cv::imwrite(str3.view().data(), restored_face);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);
@@ -379,7 +458,7 @@ int PipeLine::Apply(const cv::Mat &input_img, cv::Mat &output_img) {
             if (pipe.onnx) {
                 RunModel(
                         pipe.face_model,
-                        str.view().data(), pipe);
+                        str.view().data());
                 cv::Mat restored_face = cv::imread("output.png", cv::ImreadModes::IMREAD_COLOR_BGR);
                 cv::imwrite(str3.view().data(), restored_face);
                 fprintf(stderr, "Paste %d face in photo...\n", i + 1);

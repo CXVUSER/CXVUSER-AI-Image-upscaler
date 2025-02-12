@@ -1,11 +1,13 @@
 #ifndef PIPELINE_H
 #define PIPELINE_H
 
-#include "gfpgan.h"
-#include "realesrgan.h"
 #include "codeformer.h"
-#include "include/face.h"
+#include "gfpgan.h"
+#include "include/Faceyolov7_lite_e.h"
+#include "include/retinaface.h"
+#include "include/Faceyolov5bl.h"
 #include "include/helpers.h"
+#include "realesrgan.h"
 
 typedef struct _PipelineConfig {
     bool bg_upsample = false;
@@ -14,6 +16,7 @@ typedef struct _PipelineConfig {
     std::string model_path;
     std::wstring fc_up_model;
     std::string face_model;
+    std::wstring face_det_model;
     int custom_scale = 0;
     int model_scale = 0;
     bool ncnn = false;
@@ -23,8 +26,9 @@ typedef struct _PipelineConfig {
     float prob_thr = 0.5f;
     float nms_thr = 0.65f;
     bool codeformer = false;
+    bool useParse = false;
 
-}PipelineConfig_t;
+} PipelineConfig_t;
 
 //class onnxContext {
 //public:
@@ -44,20 +48,25 @@ typedef struct _PipelineConfig {
 //    Ort::Env* env;
 //};
 
-class PipeLine
-{
+class PipeLine {
 public:
     PipeLine();
     ~PipeLine();
-    int CreatePipeLine(PipelineConfig_t& pipeline_config);
-    int Apply(const cv::Mat& input_img, cv::Mat& output_img);
+    int CreatePipeLine(PipelineConfig_t &pipeline_config);
+    int Apply(const cv::Mat &input_img, cv::Mat &output_img);
     void paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &trans_matrix_inv, cv::Mat &bg_upsample);
+
+protected:
+    void RunModel(
+            const std::filesystem::path &modelPath,
+            const std::filesystem::path &imagePath);
 
 private:
     CodeFormer codeformer_NCNN_;
-    Face face_detector_NCNN_;
-    GFPGAN gfpgan_NCNN_; //GFPGANCleanv1-NoCE-C2
+    FaceDetModel *face_detector;
+    GFPGAN gfpgan_NCNN_;//GFPGANCleanv1-NoCE-C2
     RealESRGAN face_up_NCNN_;
     PipelineConfig_t pipe;
+    ncnn::Net parsing_net;
 };
-#endif // PIPELINE_H
+#endif// PIPELINE_H

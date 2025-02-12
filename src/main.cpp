@@ -53,14 +53,16 @@ static void print_usage() {
     fprintf(stderr, " -t <digit> tile size (default=auto)\n");
     fprintf(stderr, " -f restore faces (default=GFPGAN ncnn)\n");
     fprintf(stderr, " -m <string> esrgan model name (default=./models/x4nomos8ksc)\n");
-    fprintf(stderr, " -g <string> gfpgan model path (default=./models/gfpgan_1.4.onnx)\n");
-    fprintf(stderr, " -x <digit> YOLO face detection threshold (default=0,5) (0,3..0,7 recommended)\n");
+    fprintf(stderr, " -g <string> gfpgan(or same as gfp) model path (default=./models/gfpgan_1.4.onnx)\n");
+    fprintf(stderr, " -x <digit> face detection threshold (default=0,5) (0,3..0,7 recommended)\n");
     fprintf(stderr, " -c use CodeFormer face restore model\n");
     fprintf(stderr, " -d swith face restore infer to onnx\n");
     fprintf(stderr, " -w <digit> CodeFormer Fidelity (Only onnx) (default=0,7)\n");
     fprintf(stderr, " -u Face Upsample (after face restore)\n");
     fprintf(stderr, " -z <string> FaceUpsample model (ESRGAN)\n");
-    fprintf(stderr, " -o <string> override image output path");
+    fprintf(stderr, " -p Use face parsing for accurate face masking (default=false)\n");
+    fprintf(stderr, " -o <string> override image output path\n");
+    fprintf(stderr, " -l <string> Face detector model (default=y7)\n");
     fprintf(stderr, " -n no upsample\n");
     fprintf(stderr, " -a wait\n");
     fprintf(stderr, " -v verbose\n");
@@ -84,6 +86,8 @@ int main(int argc, char **argv)
     char out_patha[_MAX_PATH];
     std::wstring fc_up_m;
     char cdf_upa[_MAX_PATH];
+    std::wstring fc_det = L"y7";
+    char fc_deta[_MAX_PATH] = "y7";
 
     //default processing params
     bool upsample = true;
@@ -97,13 +101,14 @@ int main(int argc, char **argv)
     bool use_infer_onnx = false;
     float codeformer_fidelity = 0.5;
     bool fc_up_ = false;
+    bool useParse = false;
     float prob_face_thd = 0.5f;
     float nms_face_thd = 0.65f;
 
 #if _WIN32
     setlocale(LC_ALL, "");
     wchar_t opt;
-    while ((opt = getopt(argc, argv, L"i:s:t:j:f:m:g:v:n:c:x:w:d:u:z:o:a")) != (wchar_t) 0) {
+    while ((opt = getopt(argc, argv, L"i:s:t:j:f:m:g:v:n:c:x:w:d:u:z:o:p:a:l")) != (wchar_t) 0) {
         switch (opt) {
             case L'i': {
                 if (optarg) {
@@ -159,6 +164,15 @@ int main(int argc, char **argv)
             } break;
             case L'a': {
                 wait = true;
+            } break;
+            case L'l': {
+                if (optarg) {
+                    fc_det = optarg;
+                    wcstombs(fc_deta, fc_det.data(), _MAX_PATH);
+                }
+            } break;
+            case L'p': {
+                useParse = true;
             } break;
             case L'z': {
                 if (optarg) {
@@ -217,6 +231,7 @@ int main(int argc, char **argv)
     // if (haveOpenCL = cv::ocl::haveOpenCL())
     //    cv::ocl::setUseOpenCL(true);
     //useOpenCL = cv::ocl::useOpenCL();
+    cv::setNumThreads(cv::getNumberOfCPUs());
 
 #if _WIN32
     pixeldata = wic_decode_image(imagepath.data(), &w, &h, &c);
@@ -272,11 +287,13 @@ int main(int argc, char **argv)
                         " codeformer face upsample: %d\n"
                         " codeformer fidelity: %.2f\n"
                         " face detect threshold: %.2f\n"
+                        " face detect model: %s\n"
                         " OpenCV have OpenCL: %d\n"
-                        " OpenCV uses OpenCL: %d\n",
+                        " OpenCV uses OpenCL: %d\n"
+                        " OpenCV cpu core uses: %d\n",
                 tilesize, use_infer_onnx ? 0 : 1, use_infer_onnx, restore_face, model_scale,
                 upsample, use_codeformer, gfp_modela, esr_modela, heap_budget,
-                custom_scale, fc_up_, codeformer_fidelity, prob_face_thd, haveOpenCL, useOpenCL);
+                custom_scale, fc_up_, codeformer_fidelity, prob_face_thd, fc_deta, haveOpenCL, useOpenCL, cv::getNumThreads());
     }
     ncnn::Mat bg_upsample_ncnn(w * model_scale, h * model_scale, (size_t) c, c);
     ncnn::Mat bg_presample_ncnn(w, h, (void *) pixeldata, (size_t) c, c);
@@ -370,6 +387,9 @@ int main(int argc, char **argv)
                 pipeline_config_t.codeformer = true;
             else
                 pipeline_config_t.face_model = gfp_modela;
+
+            pipeline_config_t.face_det_model = fc_det;
+            pipeline_config_t.useParse = useParse;
 
             PipeLine pipe;
             pipe.CreatePipeLine(pipeline_config_t);

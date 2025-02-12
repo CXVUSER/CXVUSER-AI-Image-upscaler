@@ -52,4 +52,18 @@ protected:
     virtual void PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor, void* result) = 0;
 
 };
+
+class FaceDetModel {
+public:
+    virtual ~FaceDetModel(){};
+    virtual int Load(const std::string &model_path) = 0;
+    virtual int Process(const cv::Mat &input_img, void *result) = 0;
+    virtual void setScale(int scale_) = 0;
+    virtual void setThreshold(float prob_threshold_, float nms_threshold_) = 0;
+
+protected:
+    virtual void Run(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor) = 0;
+    virtual void PreProcess(const void *input_data, std::vector<Tensor_t> &input_tensor) = 0;
+    virtual void PostProcess(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor, void *result) = 0;
+};
 #endif // MODEL_H

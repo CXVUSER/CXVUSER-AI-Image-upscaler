@@ -318,7 +318,7 @@ target_link_libraries(ort INTERFACE "${ort_bin_dir}/onnxruntime.lib")
 
 endif()
 
-add_executable(${CMAKE_PROJECT_NAME} main.cpp gfpgan.cpp face.cpp helpers.cpp generator.cpp encoder.cpp codeformer.cpp pipeline.cpp realesrgan.cpp)
+add_executable(${CMAKE_PROJECT_NAME} main.cpp gfpgan.cpp Faceyolov7_lite_e.cpp Faceyolov5bl.cpp retinaface.cpp helpers.cpp generator.cpp encoder.cpp codeformer.cpp pipeline.cpp realesrgan.cpp)
 add_dependencies(${CMAKE_PROJECT_NAME} generate-spirv)
 if(USE_STATIC_MOLTENVK)
     find_library(CoreFoundation NAMES CoreFoundation)

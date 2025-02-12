@@ -1,4 +1,4 @@
-#include "include/face.h"
+#include "include/Faceyolov7_lite_e.h"
 #include "cmath"
 
 static inline float intersection_area(const Object_t& a, const Object_t& b)
@@ -177,30 +177,30 @@ static void generate_proposals(const ncnn::Mat& anchors, int stride, int pad_h, 
     }
 }
 
-void Face::setScale(int scale_) {
+void Faceyolov7_lite_e::setScale(int scale_) {
     this->scale = scale_;
     return;
 }
 
-void Face::setThreshold(float prob_threshold_, float nms_threshold_) {
+void Faceyolov7_lite_e::setThreshold(float prob_threshold_, float nms_threshold_) {
     this->prob_threshold = prob_threshold_;
     this->nms_threshold = nms_threshold_;
     return;
 }
 
-Face::Face() {
+Faceyolov7_lite_e::Faceyolov7_lite_e() {
     face_template.push_back(cv::Point2f(192.98138, 239.94708));
     face_template.push_back(cv::Point2f(318.90277, 240.1936));
     face_template.push_back(cv::Point2f(256.63416, 314.01935));
     face_template.push_back(cv::Point2f(201.26117, 371.41043));
     face_template.push_back(cv::Point2f(313.08905, 371.15118));
 }
-Face::~Face()
+Faceyolov7_lite_e::~Faceyolov7_lite_e()
 {
     net_.clear();
 }
 
-int Face::Load(const std::string& model_path)
+int Faceyolov7_lite_e::Load(const std::string& model_path)
 {
     std::string net_param_path = model_path + "/yolov7-lite-e.param";
     std::string net_model_path = model_path + "/yolov7-lite-e.bin";
@@ -239,8 +239,7 @@ int Face::Load(const std::string& model_path)
     return 0;
 }
 
-
-void Face::PreProcess(const void* input_data, std::vector<Tensor_t>& input_tensor)
+void Faceyolov7_lite_e::PreProcess(const void* input_data, std::vector<Tensor_t>& input_tensor)
 {
     const int target_size = 640;
 
@@ -287,7 +286,7 @@ void Face::PreProcess(const void* input_data, std::vector<Tensor_t>& input_tenso
     input_tensor.push_back(tensor_t);
 }
 
-void Face::Run(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor)
+void Faceyolov7_lite_e::Run(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor)
 {
     ncnn::Extractor net_ex = net_.create_extractor();
 
@@ -303,7 +302,8 @@ void Face::Run(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>&
         output_tensor.push_back(Tensor_t(out));
     }
 }
-void Face::AlignFace(const cv::Mat& img, Object_t& object)
+
+void Faceyolov7_lite_e::AlignFace(const cv::Mat& img, Object_t& object)
 {
     cv::Mat affine_matrix = cv::estimateAffinePartial2D(object.pts, face_template,cv::noArray(), cv::LMEDS);
 
@@ -313,12 +313,14 @@ void Face::AlignFace(const cv::Mat& img, Object_t& object)
 
     cv::Mat affine_matrix_inv;
     cv::invertAffineTransform(affine_matrix, affine_matrix_inv);
-    affine_matrix_inv *= scale;
+    if (scale)
+        affine_matrix_inv *= scale;
+
     affine_matrix_inv.copyTo(object.trans_inv);
     cropped_face.copyTo(object.trans_img);
 }
 
-void Face::PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor, void* result)
+void Faceyolov7_lite_e::PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor, void* result)
 {
     std::vector<Object_t> proposals;
     // stride 8
@@ -378,22 +380,24 @@ void Face::PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Te
     nms_sorted_bboxes(proposals, picked, nms_threshold);
 
     int count = picked.size();
-    ((PipeResult_t*)result)->face_count = count;
+    PipeResult_t* res = ((PipeResult_t *) result);
+
+    res->face_count = count;
 
     for (int i = 0; i != count; ++i)
     {
-        ((PipeResult_t *) result)->object.push_back(proposals[picked[i]]);
+        res->object.push_back(proposals[picked[i]]);
 
         // adjust offset to original unpadded
-        float x0 = (((PipeResult_t*)result)->object[i].rect.x - (input_tensor[0].pad_w / 2)) / input_tensor[0].scale;
-        float y0 = (((PipeResult_t*)result)->object[i].rect.y - (input_tensor[0].pad_h / 2)) / input_tensor[0].scale;
-        float x1 = (((PipeResult_t*)result)->object[i].rect.x + ((PipeResult_t*)result)->object[i].rect.width - (input_tensor[0].pad_w / 2)) / input_tensor[0].scale;
-        float y1 = (((PipeResult_t*)result)->object[i].rect.y + ((PipeResult_t*)result)->object[i].rect.height - (input_tensor[0].pad_h / 2)) / input_tensor[0].scale;
+        float x0 = (res->object[i].rect.x - (input_tensor[0].pad_w / 2)) / input_tensor[0].scale;
+        float y0 = (res->object[i].rect.y - (input_tensor[0].pad_h / 2)) / input_tensor[0].scale;
+        float x1 = (res->object[i].rect.x + res->object[i].rect.width - (input_tensor[0].pad_w / 2)) / input_tensor[0].scale;
+        float y1 = (res->object[i].rect.y + res->object[i].rect.height - (input_tensor[0].pad_h / 2)) / input_tensor[0].scale;
         for (int j = 0; j < 5; j++)
         {
-            float ptx = (((PipeResult_t*)result)->object[i].pts[j].x - (input_tensor[0].pad_w / 2)) / input_tensor[0].scale;
-            float pty = (((PipeResult_t*)result)->object[i].pts[j].y - (input_tensor[0].pad_h / 2)) / input_tensor[0].scale;
-            ((PipeResult_t*)result)->object[i].pts[j] = cv::Point2f(ptx, pty);
+            float ptx = (res->object[i].pts[j].x - (input_tensor[0].pad_w / 2)) / input_tensor[0].scale;
+            float pty = (res->object[i].pts[j].y - (input_tensor[0].pad_h / 2)) / input_tensor[0].scale;
+            res->object[i].pts[j] = cv::Point2f(ptx, pty);
         }
         
         // clip
@@ -402,14 +406,14 @@ void Face::PostProcess(const std::vector<Tensor_t>& input_tensor, std::vector<Te
         x1 = std::max(std::min(x1, (float)(input_tensor[0].img_w - 1)), 0.f);
         y1 = std::max(std::min(y1, (float)(input_tensor[0].img_h - 1)), 0.f);
 
-        ((PipeResult_t*)result)->object[i].rect.x = x0;
-        ((PipeResult_t*)result)->object[i].rect.y = y0;
-        ((PipeResult_t*)result)->object[i].rect.width = x1 - x0;
-        ((PipeResult_t*)result)->object[i].rect.height = y1 - y0;
+        res->object[i].rect.x = x0;
+        res->object[i].rect.y = y0;
+        res->object[i].rect.width = x1 - x0;
+        res->object[i].rect.height = y1 - y0;
     }
 }
 
-int Face::Process(const cv::Mat& input_img, void* result)
+int Faceyolov7_lite_e::Process(const cv::Mat& input_img, void* result)
 {
     std::vector<Tensor_t> input_tensor;
     PreProcess((void*)&input_img, input_tensor);
@@ -419,16 +423,17 @@ int Face::Process(const cv::Mat& input_img, void* result)
 
     PostProcess(input_tensor, output_tensor, result);
 
-    for(int i = 0; i != ((PipeResult_t*)result)->face_count; ++i)
+    PipeResult_t* res = ((PipeResult_t *) result);
+    for(int i = 0; i != res->face_count; ++i)
     {
-        AlignFace(input_img, ((PipeResult_t*)result)->object[i]);
+        AlignFace(input_img, res->object[i]);
     }
 
     //this->draw_objects(input_img, ((PipeResult_t *) result)->object);
     return 0;
 }
 
-void Face::draw_objects(const cv::Mat& bgr, const std::vector<Object_t>& objects)
+void Faceyolov7_lite_e::draw_objects(const cv::Mat& bgr, const std::vector<Object_t>& objects)
 {
     cv::Mat image = bgr.clone();
 

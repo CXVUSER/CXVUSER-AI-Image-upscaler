@@ -1,13 +1,12 @@
-#ifndef FACE_H
-#define FACE_H
+#ifndef FACEYOLOV7_LITE_E
+#define FACEYOLOV7_LITE_E
 #include <cmath>
 #include "include/model.h"
 
-class Face : public Model
-{
+class Faceyolov7_lite_e : public FaceDetModel {
 public:
-    Face();
-    ~Face();
+    Faceyolov7_lite_e();
+    ~Faceyolov7_lite_e();
     int Load(const std::string& model_path) override;
     int Process(const cv::Mat& input_img, void* result) override;
     void setScale(int scale_);
@@ -30,4 +29,4 @@ private:
     std::vector<int> input_indexes_;
     std::vector<int> output_indexes_;
 };
-#endif // FACE_H
+#endif // FACEYOLOV7_LITE_E
