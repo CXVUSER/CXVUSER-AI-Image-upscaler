@@ -11,7 +11,7 @@
 
 #include <opencv2\core\ocl.hpp>
 
-#define VER "1.01"
+#define VER "1.02"
 
 #if _WIN32
 static wchar_t *optarg = NULL;
@@ -62,7 +62,7 @@ static void print_usage() {
     fprintf(stderr, " -z <string> FaceUpsample model (ESRGAN)\n");
     fprintf(stderr, " -p Use face parsing for accurate face masking (default=false)\n");
     fprintf(stderr, " -o <string> override image output path\n");
-    fprintf(stderr, " -l <string> Face detector model (default=y7)\n");
+    fprintf(stderr, " -l <string> Face detector model (default=y7) (y7,y5,rt(retinaface R50)\n");
     fprintf(stderr, " -n no upsample\n");
     fprintf(stderr, " -a wait\n");
     fprintf(stderr, " -v verbose\n");
