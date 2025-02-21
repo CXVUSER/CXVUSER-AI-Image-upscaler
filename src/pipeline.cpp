@@ -855,6 +855,8 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
                         codeformer_NCNN_ = nullptr;
                     }
 
+                    gfpgan_NCNN_ = new GFPGAN();
+
                     fprintf(stderr, "Loading GFPGANCleanv1-NoCE-C2 model from /models/GFPGANCleanv1-NoCE-C2-*...\n");
                     gfpgan_NCNN_->load(pipe.model_path);
                     fprintf(stderr, "Loading GFPGANCleanv1-NoCE-C2 model finished...\n");
