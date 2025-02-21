@@ -66,17 +66,29 @@ int ColorSiggraph::load(const wchar_t *modelpath) {
 
     FILE *f = _wfopen(model_param.c_str(), L"rb");
     if (f) {
-        net.load_param(f);
+        int ret = net.load_param(f);
         fclose(f);
-    } else
-        return 0;
+        if (ret < 0) {
+            fwprintf(stderr, L"open param file %s failed\n", model_param.c_str());
+            return -1;
+        }
+    } else {
+        fwprintf(stderr, L"open param file %s failed\n", model_param.c_str());
+        return -1;
+    }
 
     f = _wfopen(model_bin.c_str(), L"rb");
     if (f) {
         net.load_model(f);
         fclose(f);
-    } else
-        return 0;
+        if (ret < 0) {
+            fwprintf(stderr, L"open bin file %s failed\n", model_bin.c_str());
+            return -1;
+        }
+    } else {
+        fwprintf(stderr, L"open bin file %s failed\n", model_bin.c_str());
+        return -1;
+    }
 
     return 0;
 }
