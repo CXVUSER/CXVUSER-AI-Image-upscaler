@@ -79,7 +79,7 @@ int ColorSiggraph::load(const wchar_t *modelpath) {
 
     f = _wfopen(model_bin.c_str(), L"rb");
     if (f) {
-        net.load_model(f);
+        int ret = net.load_model(f);
         fclose(f);
         if (ret < 0) {
             fwprintf(stderr, L"open bin file %s failed\n", model_bin.c_str());

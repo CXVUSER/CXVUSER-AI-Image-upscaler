@@ -11,7 +11,7 @@
 
 #include <opencv2\core\ocl.hpp>
 
-#define VER "1.02"
+#define VER "1.03"
 
 #if _WIN32
 static wchar_t *optarg = NULL;
@@ -275,8 +275,6 @@ int main(int argc, char **argv)
     pipeline_config_t.model_path = L"./models/";
     if (use_infer_onnx)
         pipeline_config_t.onnx = true;
-    else
-        pipeline_config_t.ncnn = true;
 
     pipeline_config_t.bg_upsample = upsample;
     pipeline_config_t.esr_model = esr_model;
@@ -288,7 +286,6 @@ int main(int argc, char **argv)
     pipeline_config_t.model_scale = (model_scale == 0) ? pipe.getModelScale(esr_model) : model_scale;
 
     pipeline_config_t.w = codeformer_fidelity;
-    wcscpy_s(pipeline_config_t.name, 255, getfilew((wchar_t *) imagepath.c_str()));
     pipeline_config_t.fc_up_model = fc_up_m;
 
     pipeline_config_t.face_restore = restore_face;
