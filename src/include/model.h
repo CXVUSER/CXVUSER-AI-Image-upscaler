@@ -43,7 +43,7 @@ class Model
 {
 public:
     virtual ~Model(){};
-    virtual int Load(const std::string& model_path) = 0;
+    virtual int Load(const std::wstring& model_path, bool gpu) = 0;
     virtual int Process(const cv::Mat& input_img, void* result) = 0;
 protected:
     
@@ -56,7 +56,7 @@ protected:
 class FaceDetModel {
 public:
     virtual ~FaceDetModel(){};
-    virtual int Load(const std::string &model_path) = 0;
+    virtual int Load(const std::wstring &model_path) = 0;
     virtual int Process(const cv::Mat &input_img, void *result) = 0;
     virtual void setScale(int scale_) = 0;
     virtual void setThreshold(float prob_threshold_, float nms_threshold_) = 0;

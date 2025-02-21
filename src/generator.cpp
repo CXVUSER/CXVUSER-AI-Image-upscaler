@@ -5,30 +5,51 @@ Generator::~Generator()
     generator_net_.clear();
 }
 
-int Generator::Load(const std::string& model_path)
+int Generator::Load(const std::wstring& model_path, bool gpu)
 {
-    std::string generator_param_path = model_path + "/CodeFormer-generator.param";
-    std::string generator_model_path = model_path + "/CodeFormer-generator.bin";
+    std::wstring generator_param_path = model_path + L"/face_restore_ncnn/CodeFormer-generator.param";
+    std::wstring generator_model_path = model_path + L"/face_restore_ncnn/CodeFormer-generator.bin";
 
-    generator_net_.opt.use_vulkan_compute = true;
-    generator_net_.opt.use_fp16_packed = false;
-    generator_net_.opt.use_fp16_storage = true;
-    generator_net_.opt.use_fp16_arithmetic = false;
-    generator_net_.opt.use_bf16_storage = false;
-
-    int ret = generator_net_.load_param(generator_param_path.c_str());
-    if (ret < 0)
-    {
-        fprintf(stderr, "open param file %s failed\n", generator_param_path.c_str());
-        return -1;
-    }
-    ret = generator_net_.load_model(generator_model_path.c_str());
-    if (ret < 0)
-    {
-        fprintf(stderr, "open bin file %s failed\n", generator_model_path.c_str());
-        return -1;
+    if (gpu) {
+        generator_net_.opt.use_vulkan_compute = true;
+        generator_net_.opt.use_fp16_packed = false;
+        generator_net_.opt.use_fp16_storage = true;
+        generator_net_.opt.use_fp16_arithmetic = false;
+        generator_net_.opt.use_bf16_storage = false;
+    } else {
+        generator_net_.opt.use_vulkan_compute = false;
+        generator_net_.opt.use_fp16_packed = false;
+        generator_net_.opt.use_fp16_storage = false;
+        generator_net_.opt.use_fp16_arithmetic = false;
+        generator_net_.opt.use_bf16_storage = false;
     }
 
+    FILE *f = _wfopen(generator_param_path.c_str(), L"rb");
+    if (f) {
+        int ret = generator_net_.load_param(f);
+        fclose(f);
+        if (ret < 0) {
+            fwprintf(stderr, L"open param file %s failed\n", generator_param_path.c_str());
+            return -1;
+        }
+    } else {
+        fwprintf(stderr, L"open param file %s failed\n", generator_param_path.c_str());
+        return -1;
+    }
+
+    f = _wfopen(generator_model_path.c_str(), L"rb");
+    if (f) {
+        int ret = generator_net_.load_model(f);
+        fclose(f);
+        if (ret < 0) {
+            fwprintf(stderr, L"open bin file %s failed\n", generator_model_path.c_str());
+            return -1;
+        }
+    } else {
+        fwprintf(stderr, L"open bin file %s failed\n", generator_model_path.c_str());
+        return -1;
+    }
+    
     input_indexes_.resize(6);
     const auto &blobs = generator_net_.blobs();
     for (int i = 0; i != blobs.size(); ++i) 

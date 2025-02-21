@@ -90,7 +90,7 @@ public:
     GFPGAN();
     ~GFPGAN();
 
-    int load(const std::string& path);
+    int load(const std::wstring& path);
 
     int process(const cv::Mat& img, ncnn::Mat& outimage);
 
@@ -112,7 +112,7 @@ private:
         const float* style_convs_modulated_conv_modulation_bias,
         const float* style_convs_weight,
         const float* style_convs_bias);
-    int load_weights(const char* model_path, std::vector<StyleConvWeights>& style_conv_weights,
+    int load_weights(const wchar_t* model_path, std::vector<StyleConvWeights>& style_conv_weights,
         std::vector<ToRgbConvWeights>& to_rgbs_conv_weights, ncnn::Mat& const_input);
 private:
     const float mean_vals[3] = { 127.5f, 127.5f, 127.5f };

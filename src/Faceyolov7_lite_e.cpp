@@ -189,6 +189,8 @@ void Faceyolov7_lite_e::setThreshold(float prob_threshold_, float nms_threshold_
 }
 
 Faceyolov7_lite_e::Faceyolov7_lite_e() {
+    net_.opt.num_threads = 4;
+    net_.opt.use_vulkan_compute = false;
     face_template.push_back(cv::Point2f(192.98138, 239.94708));
     face_template.push_back(cv::Point2f(318.90277, 240.1936));
     face_template.push_back(cv::Point2f(256.63416, 314.01935));
@@ -200,24 +202,37 @@ Faceyolov7_lite_e::~Faceyolov7_lite_e()
     net_.clear();
 }
 
-int Faceyolov7_lite_e::Load(const std::string& model_path)
+int Faceyolov7_lite_e::Load(const std::wstring& model_path)
 {
-    std::string net_param_path = model_path + "/yolov7-lite-e.param";
-    std::string net_model_path = model_path + "/yolov7-lite-e.bin";
+    std::wstring net_param_path = model_path + L"/face_det/yolov7-lite-e.param";
+    std::wstring net_model_path = model_path + L"/face_det/yolov7-lite-e.bin";
 
-    int ret = net_.load_param(net_param_path.c_str());
-    if (ret < 0)
-    {
-        fprintf(stderr, "open param file %s failed\n", net_param_path.c_str());
+    FILE *f = _wfopen(net_param_path.c_str(), L"rb");
+    if (f) {
+        int ret = net_.load_param(f);
+        fclose(f);
+        if (ret < 0) {
+            fwprintf(stderr, L"open param file %s failed\n", net_param_path.c_str());
+            return -1;
+        }
+    } else {
+        fwprintf(stderr, L"open param file %s failed\n", net_param_path.c_str());
         return -1;
     }
-    ret = net_.load_model(net_model_path.c_str());
-    if (ret < 0)
-    {
-        fprintf(stderr, "open bin file %s failed\n", net_model_path.c_str());
+    
+    f = _wfopen(net_model_path.c_str(), L"rb");
+    if (f) {
+        int ret = net_.load_model(f);
+        fclose(f);
+        if (ret < 0) {
+            fwprintf(stderr, L"open bin file %s failed\n", net_model_path.c_str());
+            return -1;
+        }
+    } else {
+        fwprintf(stderr, L"open bin file %s failed\n", net_model_path.c_str());
         return -1;
     }
-
+    
     output_indexes_.resize(3);
     const auto &blobs = net_.blobs();
     for (int i = 0; i != blobs.size(); ++i) 

@@ -213,13 +213,18 @@ static void generate_proposals(const ncnn::Mat &anchors, int feat_stride, const 
     }
 }
 
-FaceR::FaceR() {
+FaceR::FaceR(bool gpu) {
     face_template.push_back(cv::Point2f(192.98138, 239.94708));
     face_template.push_back(cv::Point2f(318.90277, 240.1936));
     face_template.push_back(cv::Point2f(256.63416, 314.01935));
     face_template.push_back(cv::Point2f(201.26117, 371.41043));
     face_template.push_back(cv::Point2f(313.08905, 371.15118));
-    net_.opt.use_vulkan_compute = true;
+    if (gpu)
+        net_.opt.use_vulkan_compute = true;
+    else
+        net_.opt.use_vulkan_compute = false;
+
+    this->gpu = gpu;
 }
 FaceR::~FaceR() {
     net_.clear();
@@ -236,9 +241,9 @@ void FaceR::setThreshold(float prob_threshold_, float nms_threshold_) {
     return;
 }
 
-int FaceR::Load(const std::string &model_path) {
-    std::string model_param = model_path + "/retinaface-R50.param";
-    std::string model_bin = model_path + "/retinaface-R50.bin";
+int FaceR::Load(const std::wstring &model_path) {
+    std::wstring model_param = model_path + L"/face_det/retinaface-R50.param";
+    std::wstring model_bin = model_path + L"/face_det/retinaface-R50.bin";
 
     // model is converted from
     // https://github.com/deepinsight/insightface/tree/master/RetinaFace#retinaface-pretrained-models
@@ -247,10 +252,32 @@ int FaceR::Load(const std::string &model_path) {
     // mobilenet (small fast)
     //     retinaface.load_param("mnet.25-opt.param");
     //     retinaface.load_model("mnet.25-opt.bin");
-    if (net_.load_param(model_param.c_str()))
-        return 0;
-    if (net_.load_model(model_bin.c_str()))
-        return 0;
+
+    FILE *f = _wfopen(model_param.c_str(), L"rb");
+    if (f) {
+        int ret = net_.load_param(f);
+        fclose(f);
+        if (ret < 0) {
+            fwprintf(stderr, L"open param file %s failed\n", model_param.c_str());
+            return -1;
+        }
+    } else {
+        fwprintf(stderr, L"open param file %s failed\n", model_param.c_str());
+        return -1;
+    }
+
+    f = _wfopen(model_bin.c_str(), L"rb");
+    if (f) {
+        int ret = net_.load_model(f);
+        fclose(f);
+        if (ret < 0) {
+            fwprintf(stderr, L"open model file %s failed\n", model_bin.c_str());
+            return -1;
+        }
+    } else {
+        fwprintf(stderr, L"open model file %s failed\n", model_bin.c_str());
+        return -1;
+    }
 }
 
 int FaceR::Process(const cv::Mat &bgr, void *result) {
@@ -382,7 +409,8 @@ void FaceR::AlignFace(const cv::Mat &img, Object_t &objects) {
 
     cv::Mat affine_matrix_inv;
     cv::invertAffineTransform(affine_matrix, affine_matrix_inv);
-    affine_matrix_inv *= scale;
+    if (scale)
+        affine_matrix_inv *= scale;
     affine_matrix_inv.copyTo(objects.trans_inv);
     cropped_face.copyTo(objects.trans_img);
 }

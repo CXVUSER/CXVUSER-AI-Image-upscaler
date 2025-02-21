@@ -41,30 +41,52 @@ void Encoder::GetCodebookFeat(const ncnn::Mat& soft_one_hot, ncnn::Mat& min_enco
     }
 }
 
-int Encoder::Load(const std::string& model_path)
+int Encoder::Load(const std::wstring& model_path, bool gpu)
 {
-    std::string encoder_param_path = model_path + "/CodeFormer-encoder.param";
-    std::string encoder_model_path = model_path + "/CodeFormer-encoder.bin";
-    encoder_net_.opt.use_vulkan_compute = true;
-    //encoder_net_.opt.num_threads = 4;
-    encoder_net_.opt.use_fp16_packed = false;
-    encoder_net_.opt.use_fp16_storage = true;
-    encoder_net_.opt.use_fp16_arithmetic = false;
-    encoder_net_.opt.use_bf16_storage = false;
+    std::wstring encoder_param_path = model_path + L"/face_restore_ncnn/CodeFormer-encoder.param";
+    std::wstring encoder_model_path = model_path + L"/face_restore_ncnn/CodeFormer-encoder.bin";
+    if (gpu) {
+        encoder_net_.opt.use_vulkan_compute = true;
+        //encoder_net_.opt.num_threads = 4;
+        encoder_net_.opt.use_fp16_packed = false;
+        encoder_net_.opt.use_fp16_storage = true;
+        encoder_net_.opt.use_fp16_arithmetic = false;
+        encoder_net_.opt.use_bf16_storage = false;
+    } else {
+        encoder_net_.opt.use_vulkan_compute = false;
+        encoder_net_.opt.num_threads = 4;
+        encoder_net_.opt.use_fp16_packed = false;
+        encoder_net_.opt.use_fp16_storage = false;
+        encoder_net_.opt.use_fp16_arithmetic = false;
+        encoder_net_.opt.use_bf16_storage = false;
+    }
 
-    int ret = encoder_net_.load_param(encoder_param_path.c_str());
-    if (ret < 0)
-    {
-        fprintf(stderr, "open param file %s failed\n", encoder_param_path.c_str());
+    FILE *f = _wfopen(encoder_param_path.c_str(), L"rb");
+    if (f) {
+        int ret = encoder_net_.load_param(f);
+        fclose(f);
+        if (ret < 0) {
+            fprintf(stderr, "open bin file %s failed\n", encoder_param_path.c_str());
+            return -1;
+        }
+    } else {
+        fprintf(stderr, "open bin file %s failed\n", encoder_param_path.c_str());
         return -1;
     }
-    ret = encoder_net_.load_model(encoder_model_path.c_str());
-    if (ret < 0)
-    {
+
+    f = _wfopen(encoder_model_path.c_str(), L"rb");
+    if (f) {
+        int ret = encoder_net_.load_model(f);
+        fclose(f);
+        if (ret < 0) {
+            fprintf(stderr, "open bin file %s failed\n", encoder_model_path.c_str());
+            return -1;
+        }
+    } else {
         fprintf(stderr, "open bin file %s failed\n", encoder_model_path.c_str());
         return -1;
     }
-    
+
     for(const auto& input : encoder_net_.input_indexes())
     {
         input_indexes_.push_back(input);

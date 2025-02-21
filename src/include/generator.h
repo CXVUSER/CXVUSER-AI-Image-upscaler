@@ -6,7 +6,7 @@ class Generator : public Model
 {
 public:
     ~Generator();
-    int Load(const std::string& model_path) override;
+    int Load(const std::wstring& model_path, bool gpu) override;
     int Process(const cv::Mat& input_img, void* result) override;
 protected:
     void Run(const std::vector<Tensor_t>& input_tensor, std::vector<Tensor_t>& output_tensor) override;

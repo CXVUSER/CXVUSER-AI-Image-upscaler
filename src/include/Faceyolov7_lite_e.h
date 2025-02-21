@@ -7,7 +7,7 @@ class Faceyolov7_lite_e : public FaceDetModel {
 public:
     Faceyolov7_lite_e();
     ~Faceyolov7_lite_e();
-    int Load(const std::string& model_path) override;
+    int Load(const std::wstring& model_path) override;
     int Process(const cv::Mat& input_img, void* result) override;
     void setScale(int scale_);
     void setThreshold(float prob_threshold_, float nms_threshold_);

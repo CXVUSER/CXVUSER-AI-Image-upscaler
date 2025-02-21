@@ -426,7 +426,7 @@ int GFPGAN::style_convs_modulated_conv(ncnn::Mat &x, ncnn::Mat style, int sample
     return 0;
 }
 
-int GFPGAN::load_weights(const char *model_path, std::vector<StyleConvWeights> &style_conv_weights,
+int GFPGAN::load_weights(const wchar_t *model_path, std::vector<StyleConvWeights> &style_conv_weights,
                          std::vector<ToRgbConvWeights> &to_rgbs_conv_weights, ncnn::Mat &const_input) {
     std::ifstream ifs(model_path, std::ios::binary | std::ios::in);
     if (!ifs.is_open()) {
@@ -498,30 +498,44 @@ int GFPGAN::load_weights(const char *model_path, std::vector<StyleConvWeights> &
     return 0;
 }
 
-int GFPGAN::load(const std::string &path) {
+int GFPGAN::load(const std::wstring &path) {
 
-    std::string param_path = path + "/GFPGANCleanv1-NoCE-C2-encoder.param";
-    std::string model_path = path + "/GFPGANCleanv1-NoCE-C2-encoder.bin";
-    std::string style_path = path + "/GFPGANCleanv1-NoCE-C2-style.bin";
+    std::wstring param_path = path + L"/face_restore_ncnn/GFPGANCleanv1-NoCE-C2-encoder.param";
+    std::wstring model_path = path + L"/face_restore_ncnn/GFPGANCleanv1-NoCE-C2-encoder.bin";
+    std::wstring style_path = path + L"/face_restore_ncnn/GFPGANCleanv1-NoCE-C2-style.bin";
 
-    int ret = net.load_param(param_path.c_str());
-    if (ret < 0) {
-        fprintf(stderr, "open param file %s failed\n", param_path.c_str());
-        return -1;
-    }
-    ret = net.load_model(model_path.c_str());
-    if (ret < 0) {
-        fprintf(stderr, "open bin file %s failed\n", model_path.c_str());
-        return -1;
-    }
-
-
-    ret = load_weights(style_path.c_str(), style_conv_weights, to_rgbs_conv_weights, const_input);
-    if (ret < 0) {
-        fprintf(stderr, "open style file %s failed!\n", style_path.c_str());
+    FILE *f = _wfopen(param_path.c_str(), L"rb");
+    if (f) {
+        int ret = net.load_param(f);
+        fclose(f);
+        if (ret < 0) {
+            fwprintf(stderr, L"open param file %s failed\n", param_path.c_str());
+            return -1;
+        }
+    } else {
+        fwprintf(stderr, L"open param file %s failed\n", param_path.c_str());
         return -1;
     }
 
+    f = _wfopen(model_path.c_str(), L"rb");
+    if (f) {
+        int ret = net.load_model(f);
+        fclose(f);
+        if (ret < 0) {
+            fwprintf(stderr, L"open bin file %s failed\n", model_path.c_str());
+            return -1;
+        }
+    } else {
+        fwprintf(stderr, L"open bin file %s failed\n", model_path.c_str());
+        return -1;
+    }
+    
+    int ret = load_weights(style_path.c_str(), style_conv_weights, to_rgbs_conv_weights, const_input);
+    if (ret < 0) {
+        fwprintf(stderr, L"open style file %s failed!\n", style_path.c_str());
+        return -1;
+    }
+    
     return 0;
 }
 

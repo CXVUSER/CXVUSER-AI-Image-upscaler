@@ -13,16 +13,13 @@
 class RealESRGAN
 {
 public:
-    RealESRGAN(bool tta_mode = false);
+    RealESRGAN(bool gpu = true,bool tta_mode = false);
     ~RealESRGAN();
 
-#if _WIN32
     int load(const wchar_t *parampath, const wchar_t *modelpath);
-#else
-    int load(const std::string &parampath, const std::string &modelpath);
-#endif
-
     int process(const ncnn::Mat &inimage, ncnn::Mat &outimage) const;
+    int process_gpu(const ncnn::Mat &inimage, ncnn::Mat &outimage) const;
+    int process_cpu(const ncnn::Mat &inimage, ncnn::Mat &outimage) const;
 
 public:
     // realesrgan parameters
@@ -32,12 +29,13 @@ public:
 
 private:
     ncnn::Net net;
-    ncnn::Pipeline *realesrgan_preproc;
-    ncnn::Pipeline *realesrgan_postproc;
-    ncnn::Layer *bicubic_2x;
-    ncnn::Layer *bicubic_3x;
-    ncnn::Layer *bicubic_4x;
+    ncnn::Pipeline *realesrgan_preproc = nullptr;
+    ncnn::Pipeline *realesrgan_postproc = nullptr;
+    ncnn::Layer *bicubic_2x = nullptr;
+    ncnn::Layer *bicubic_3x = nullptr;
+    ncnn::Layer *bicubic_4x = nullptr;
     bool tta_mode;
+    bool gpu;
 };
 
 #endif // REALESRGAN_H

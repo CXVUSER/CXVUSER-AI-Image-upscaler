@@ -3,8 +3,8 @@
 #include "include/generator.h"
 #include "include/codeformer.h"
 
-CodeFormer::CodeFormer():encoder_(new Encoder),generator_(new Generator)
-{
+CodeFormer::CodeFormer(bool gpu) : encoder_(new Encoder), generator_(new Generator) {
+    this->gpu = gpu;
 }
 CodeFormer::~CodeFormer()
 {
@@ -12,15 +12,15 @@ CodeFormer::~CodeFormer()
     encoder_.reset();
 }
 
-int CodeFormer::Load(const std::string& model_path)
+int CodeFormer::Load(const std::wstring& model_path)
 {
-    int ret = encoder_->Load(model_path);
+    int ret = encoder_->Load(model_path, gpu);
     if(ret < 0)
     {
         return -1;
     }
 
-    ret = generator_->Load(model_path);
+    ret = generator_->Load(model_path, gpu);
     if(ret < 0)
     {
         return -1;

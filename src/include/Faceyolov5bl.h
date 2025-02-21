@@ -25,7 +25,7 @@ class Face_yolov5_bl : public FaceDetModel {
 public:
     Face_yolov5_bl();
     ~Face_yolov5_bl();
-    int Load(const std::string &model_path) override;
+    int Load(const std::wstring &model_path) override;
     int Process(const cv::Mat &input_img, void *result) override;
     int align_warp_face(const cv::Mat &img, Object_t &objects);
     void draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects);

@@ -43,16 +43,24 @@ static const uint32_t realesrgan_postproc_tta_int8s_spv_data[] = {
 #include "realesrgan_postproc_tta_int8s.spv.hex.h"
 };
 
-RealESRGAN::RealESRGAN(bool _tta_mode)
-{
-    net.opt.use_vulkan_compute = true;
-    net.opt.use_fp16_packed = true;
-    net.opt.use_fp16_storage = true;
-    net.opt.use_fp16_arithmetic = false;
-    net.opt.use_int8_storage = true;
-    net.opt.use_int8_arithmetic = false;
+RealESRGAN::RealESRGAN(bool gpu, bool _tta_mode) {
+    if (gpu) {
+        net.opt.use_vulkan_compute = true;
+        net.opt.use_fp16_packed = true;
+        net.opt.use_fp16_storage = true;
+        net.opt.use_fp16_arithmetic = false;
+        net.opt.use_int8_storage = true;
+        net.opt.use_int8_arithmetic = false;
 
-    net.set_vulkan_device(0);
+        net.set_vulkan_device(0);
+    } else {
+        net.opt.use_vulkan_compute = false;
+        net.opt.use_fp16_packed = true;
+        net.opt.use_fp16_storage = false;
+        net.opt.use_fp16_arithmetic = false;
+        net.opt.use_int8_storage = true;
+        net.set_vulkan_device(0);
+    }
 
     realesrgan_preproc = 0;
     realesrgan_postproc = 0;
@@ -60,6 +68,7 @@ RealESRGAN::RealESRGAN(bool _tta_mode)
     bicubic_3x = 0;
     bicubic_4x = 0;
     tta_mode = _tta_mode;
+    this->gpu = gpu;
 }
 
 RealESRGAN::~RealESRGAN()
@@ -89,13 +98,8 @@ RealESRGAN::~RealESRGAN()
     }
 }
 
-#if _WIN32
 int RealESRGAN::load(const wchar_t *parampath, const wchar_t *modelpath)
-#else
-int RealESRGAN::load(const std::string &parampath, const std::string &modelpath)
-#endif
 {
-#if _WIN32
     {
         FILE *fp = _wfopen(parampath, L"rb");
         if (!fp)
@@ -118,10 +122,6 @@ int RealESRGAN::load(const std::string &parampath, const std::string &modelpath)
 
         fclose(fp);
     }
-#else
-    net.load_param(parampath.c_str());
-    net.load_model(modelpath.c_str());
-#endif
 
     // initialize preprocess and postprocess pipeline
     {
@@ -213,7 +213,15 @@ int RealESRGAN::load(const std::string &parampath, const std::string &modelpath)
     return 0;
 }
 
-int RealESRGAN::process(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
+int RealESRGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const 
+{
+    if (gpu)
+        return process_gpu(inimage, outimage);
+    else
+        return process_cpu(inimage, outimage);
+}
+
+int RealESRGAN::process_gpu(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
 {
     const unsigned char *pixeldata = (const unsigned char *)inimage.data;
     const int w = inimage.w;
@@ -599,6 +607,286 @@ int RealESRGAN::process(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
 
     net.vulkan_device()->reclaim_blob_allocator(blob_vkallocator);
     net.vulkan_device()->reclaim_staging_allocator(staging_vkallocator);
+
+    return 0;
+}
+
+int RealESRGAN::process_cpu(const ncnn::Mat &inimage, ncnn::Mat &outimage) const {
+    const unsigned char *pixeldata = (const unsigned char *) inimage.data;
+    const int w = inimage.w;
+    const int h = inimage.h;
+    const int channels = inimage.elempack;
+
+    const int TILE_SIZE_X = tilesize;
+    const int TILE_SIZE_Y = tilesize;
+
+    ncnn::Option opt = net.opt;
+
+    // each tile 100x100
+    const int xtiles = (w + TILE_SIZE_X - 1) / TILE_SIZE_X;
+    const int ytiles = (h + TILE_SIZE_Y - 1) / TILE_SIZE_Y;
+
+    for (int yi = 0; yi < ytiles; yi++) {
+        const int tile_h_nopad = std::min((yi + 1) * TILE_SIZE_Y, h) - yi * TILE_SIZE_Y;
+
+        int in_tile_y0 = std::max(yi * TILE_SIZE_Y - prepadding, 0);
+        int in_tile_y1 = std::min((yi + 1) * TILE_SIZE_Y + prepadding, h);
+
+        for (int xi = 0; xi < xtiles; xi++) {
+            const int tile_w_nopad = std::min((xi + 1) * TILE_SIZE_X, w) - xi * TILE_SIZE_X;
+
+            int in_tile_x0 = std::max(xi * TILE_SIZE_X - prepadding, 0);
+            int in_tile_x1 = std::min((xi + 1) * TILE_SIZE_X + prepadding, w);
+
+            // crop tile
+            ncnn::Mat in;
+            {
+                if (channels == 3) {
+#if _WIN32
+                    in = ncnn::Mat::from_pixels_roi(pixeldata, ncnn::Mat::PIXEL_BGR2RGB, w, h, in_tile_x0, in_tile_y0, in_tile_x1 - in_tile_x0, in_tile_y1 - in_tile_y0);
+#else
+                    in = ncnn::Mat::from_pixels_roi(pixeldata, ncnn::Mat::PIXEL_RGB, w, h, in_tile_x0, in_tile_y0, in_tile_x1 - in_tile_x0, in_tile_y1 - in_tile_y0);
+#endif
+                }
+                if (channels == 4) {
+#if _WIN32
+                    in = ncnn::Mat::from_pixels_roi(pixeldata, ncnn::Mat::PIXEL_BGRA2RGBA, w, h, in_tile_x0, in_tile_y0, in_tile_x1 - in_tile_x0, in_tile_y1 - in_tile_y0);
+#else
+                    in = ncnn::Mat::from_pixels_roi(pixeldata, ncnn::Mat::PIXEL_RGBA, w, h, in_tile_x0, in_tile_y0, in_tile_x1 - in_tile_x0, in_tile_y1 - in_tile_y0);
+#endif
+                }
+            }
+
+            ncnn::Mat out;
+
+            if (tta_mode) {
+                // split alpha and preproc
+                ncnn::Mat in_tile[8];
+                ncnn::Mat in_alpha_tile;
+                {
+                    in_tile[0].create(in.w, in.h, 3);
+                    for (int q = 0; q < 3; q++) {
+                        const float *ptr = in.channel(q);
+                        float *outptr0 = in_tile[0].channel(q);
+
+                        for (int i = 0; i < in.h; i++) {
+                            for (int j = 0; j < in.w; j++) {
+                                *outptr0++ = *ptr++ * (1 / 255.f);
+                            }
+                        }
+                    }
+
+                    if (channels == 4) {
+                        in_alpha_tile = in.channel_range(3, 1).clone();
+                    }
+                }
+
+                // border padding
+                {
+                    int pad_top = std::max(prepadding - yi * TILE_SIZE_Y, 0);
+                    int pad_bottom = std::max(std::min((yi + 1) * TILE_SIZE_Y + prepadding - h, prepadding), 0);
+                    int pad_left = std::max(prepadding - xi * TILE_SIZE_X, 0);
+                    int pad_right = std::max(std::min((xi + 1) * TILE_SIZE_X + prepadding - w, prepadding), 0);
+
+                    ncnn::Mat in_tile_padded;
+                    ncnn::copy_make_border(in_tile[0], in_tile_padded, pad_top, pad_bottom, pad_left, pad_right, 2, 0.f, net.opt);
+                    in_tile[0] = in_tile_padded;
+                }
+
+                // the other 7 directions
+                {
+                    in_tile[1].create(in_tile[0].w, in_tile[0].h, 3);
+                    in_tile[2].create(in_tile[0].w, in_tile[0].h, 3);
+                    in_tile[3].create(in_tile[0].w, in_tile[0].h, 3);
+                    in_tile[4].create(in_tile[0].h, in_tile[0].w, 3);
+                    in_tile[5].create(in_tile[0].h, in_tile[0].w, 3);
+                    in_tile[6].create(in_tile[0].h, in_tile[0].w, 3);
+                    in_tile[7].create(in_tile[0].h, in_tile[0].w, 3);
+
+                    for (int q = 0; q < 3; q++) {
+                        const ncnn::Mat in_tile_0 = in_tile[0].channel(q);
+                        ncnn::Mat in_tile_1 = in_tile[1].channel(q);
+                        ncnn::Mat in_tile_2 = in_tile[2].channel(q);
+                        ncnn::Mat in_tile_3 = in_tile[3].channel(q);
+                        ncnn::Mat in_tile_4 = in_tile[4].channel(q);
+                        ncnn::Mat in_tile_5 = in_tile[5].channel(q);
+                        ncnn::Mat in_tile_6 = in_tile[6].channel(q);
+                        ncnn::Mat in_tile_7 = in_tile[7].channel(q);
+
+                        for (int i = 0; i < in_tile[0].h; i++) {
+                            const float *outptr0 = in_tile_0.row(i);
+                            float *outptr1 = in_tile_1.row(in_tile[0].h - 1 - i);
+                            float *outptr2 = in_tile_2.row(i) + in_tile[0].w - 1;
+                            float *outptr3 = in_tile_3.row(in_tile[0].h - 1 - i) + in_tile[0].w - 1;
+
+                            for (int j = 0; j < in_tile[0].w; j++) {
+                                float *outptr4 = in_tile_4.row(j) + i;
+                                float *outptr5 = in_tile_5.row(in_tile[0].w - 1 - j) + i;
+                                float *outptr6 = in_tile_6.row(j) + in_tile[0].h - 1 - i;
+                                float *outptr7 = in_tile_7.row(in_tile[0].w - 1 - j) + in_tile[0].h - 1 - i;
+
+                                float v = *outptr0++;
+
+                                *outptr1++ = v;
+                                *outptr2-- = v;
+                                *outptr3-- = v;
+                                *outptr4 = v;
+                                *outptr5 = v;
+                                *outptr6 = v;
+                                *outptr7 = v;
+                            }
+                        }
+                    }
+                }
+
+                // realsr
+                ncnn::Mat out_tile[8];
+                for (int ti = 0; ti < 8; ti++) {
+                    ncnn::Extractor ex = net.create_extractor();
+
+                    ex.input("data", in_tile[ti]);
+
+                    ex.extract("output", out_tile[ti]);
+                }
+
+                ncnn::Mat out_alpha_tile;
+                if (channels == 4) {
+                    if (scale == 1) {
+                        out_alpha_tile = in_alpha_tile;
+                    }
+                    if (scale == 4) {
+                        bicubic_4x->forward(in_alpha_tile, out_alpha_tile, opt);
+                    }
+                }
+
+                // postproc and merge alpha
+                {
+                    out.create(tile_w_nopad * scale, tile_h_nopad * scale, channels);
+                    for (int q = 0; q < 3; q++) {
+                        const ncnn::Mat out_tile_0 = out_tile[0].channel(q);
+                        const ncnn::Mat out_tile_1 = out_tile[1].channel(q);
+                        const ncnn::Mat out_tile_2 = out_tile[2].channel(q);
+                        const ncnn::Mat out_tile_3 = out_tile[3].channel(q);
+                        const ncnn::Mat out_tile_4 = out_tile[4].channel(q);
+                        const ncnn::Mat out_tile_5 = out_tile[5].channel(q);
+                        const ncnn::Mat out_tile_6 = out_tile[6].channel(q);
+                        const ncnn::Mat out_tile_7 = out_tile[7].channel(q);
+                        float *outptr = out.channel(q);
+
+                        for (int i = 0; i < out.h; i++) {
+                            const float *ptr0 = out_tile_0.row(i + prepadding * scale) + prepadding * scale;
+                            const float *ptr1 = out_tile_1.row(out_tile[0].h - 1 - i - prepadding * scale) + prepadding * scale;
+                            const float *ptr2 = out_tile_2.row(i + prepadding * scale) + out_tile[0].w - 1 - prepadding * scale;
+                            const float *ptr3 = out_tile_3.row(out_tile[0].h - 1 - i - prepadding * scale) + out_tile[0].w - 1 - prepadding * scale;
+
+                            for (int j = 0; j < out.w; j++) {
+                                const float *ptr4 = out_tile_4.row(j + prepadding * scale) + i + prepadding * scale;
+                                const float *ptr5 = out_tile_5.row(out_tile[0].w - 1 - j - prepadding * scale) + i + prepadding * scale;
+                                const float *ptr6 = out_tile_6.row(j + prepadding * scale) + out_tile[0].h - 1 - i - prepadding * scale;
+                                const float *ptr7 = out_tile_7.row(out_tile[0].w - 1 - j - prepadding * scale) + out_tile[0].h - 1 - i - prepadding * scale;
+
+                                float v = (*ptr0++ + *ptr1++ + *ptr2-- + *ptr3-- + *ptr4 + *ptr5 + *ptr6 + *ptr7) / 8;
+
+                                *outptr++ = v * 255.f + 0.5f;
+                            }
+                        }
+                    }
+
+                    if (channels == 4) {
+                        memcpy(out.channel_range(3, 1), out_alpha_tile, out_alpha_tile.total() * sizeof(float));
+                    }
+                }
+            } else {
+                // split alpha and preproc
+                ncnn::Mat in_tile;
+                ncnn::Mat in_alpha_tile;
+                {
+                    in_tile.create(in.w, in.h, 3);
+                    for (int q = 0; q < 3; q++) {
+                        const float *ptr = in.channel(q);
+                        float *outptr = in_tile.channel(q);
+
+                        for (int i = 0; i < in.w * in.h; i++) {
+                            *outptr++ = *ptr++ * (1 / 255.f);
+                        }
+                    }
+
+                    if (channels == 4) {
+                        in_alpha_tile = in.channel_range(3, 1).clone();
+                    }
+                }
+
+                // border padding
+                {
+                    int pad_top = std::max(prepadding - yi * TILE_SIZE_Y, 0);
+                    int pad_bottom = std::max(std::min((yi + 1) * TILE_SIZE_Y + prepadding - h, prepadding), 0);
+                    int pad_left = std::max(prepadding - xi * TILE_SIZE_X, 0);
+                    int pad_right = std::max(std::min((xi + 1) * TILE_SIZE_X + prepadding - w, prepadding), 0);
+
+                    ncnn::Mat in_tile_padded;
+                    ncnn::copy_make_border(in_tile, in_tile_padded, pad_top, pad_bottom, pad_left, pad_right, 2, 0.f, net.opt);
+                    in_tile = in_tile_padded;
+                }
+
+                // realsr
+                ncnn::Mat out_tile;
+                {
+                    ncnn::Extractor ex = net.create_extractor();
+
+                    ex.input("data", in_tile);
+
+                    ex.extract("output", out_tile);
+                }
+
+                ncnn::Mat out_alpha_tile;
+                if (channels == 4) {
+                    if (scale == 1) {
+                        out_alpha_tile = in_alpha_tile;
+                    }
+                    if (scale == 4) {
+                        bicubic_4x->forward(in_alpha_tile, out_alpha_tile, opt);
+                    }
+                }
+
+                // postproc and merge alpha
+                {
+                    out.create(tile_w_nopad * scale, tile_h_nopad * scale, channels);
+                    for (int q = 0; q < 3; q++) {
+                        float *outptr = out.channel(q);
+
+                        for (int i = 0; i < out.h; i++) {
+                            const float *ptr = out_tile.channel(q).row(i + prepadding * scale) + prepadding * scale;
+
+                            for (int j = 0; j < out.w; j++) {
+                                *outptr++ = *ptr++ * 255.f + 0.5f;
+                            }
+                        }
+                    }
+
+                    if (channels == 4) {
+                        memcpy(out.channel_range(3, 1), out_alpha_tile, out_alpha_tile.total() * sizeof(float));
+                    }
+                }
+            }
+
+            {
+                if (channels == 3) {
+#if _WIN32
+                    out.to_pixels((unsigned char *) outimage.data + yi * scale * TILE_SIZE_Y * w * scale * channels + xi * scale * TILE_SIZE_X * channels, ncnn::Mat::PIXEL_RGB2BGR, w * scale * channels);
+#else
+                    out.to_pixels((unsigned char *) outimage.data + yi * scale * TILE_SIZE_Y * w * scale * channels + xi * scale * TILE_SIZE_X * channels, ncnn::Mat::PIXEL_RGB, w * scale * channels);
+#endif
+                }
+                if (channels == 4) {
+#if _WIN32
+                    out.to_pixels((unsigned char *) outimage.data + yi * scale * TILE_SIZE_Y * w * scale * channels + xi * scale * TILE_SIZE_X * channels, ncnn::Mat::PIXEL_RGBA2BGRA, w * scale * channels);
+#else
+                    out.to_pixels((unsigned char *) outimage.data + yi * scale * TILE_SIZE_Y * w * scale * channels + xi * scale * TILE_SIZE_X * channels, ncnn::Mat::PIXEL_RGBA, w * scale * channels);
+#endif
+                }
+            }
+        }
+    }
 
     return 0;
 }
