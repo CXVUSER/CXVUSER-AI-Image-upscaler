@@ -14,6 +14,7 @@ The goal of this project is to develop practical algorithms that can restore the
 4. CodeFormer 0.1.0
 5. RestoreFormer, RestoreFormer-plus-plus
 6. GPEN
+7. Siggraph17 for colorize photo
 
 ### Usage tips:
 ```
@@ -23,19 +24,19 @@ Usage: this_binary [options]...
  -s <digit> model scale factor (default=autodetect)
  -j <digit> custom output scale factor
  -t <digit> tile size (default=auto)
- -f restore faces (default=GFPGAN ncnn)
- -m <string> esrgan model name (default=./models/x4nomos8ksc)
- -g <string> gfpgan(or same as gfp) model path (default=./models/gfpgan_1.4.onnx)
+ -f restore faces (default=codeformer)
+ -m <string> esrgan model name (default=./models/ESRGAN/4xNomos8kSC)
+ -g <string> gfpgan(or same as gfp) model path (default=./models/face_restore/codeformer_0_1_0.onnx)
  -x <digit> face detection threshold (default=0,5) (0,3..0,7 recommended)
- -c use CodeFormer face restore model
+ -c use CodeFormer face restore model (ncnn)
  -d swith face restore infer to onnx
  -w <digit> CodeFormer Fidelity (Only onnx) (default=0,7)
  -u Face Upsample (after face restore)
  -z <string> FaceUpsample model (ESRGAN)
  -p Use face parsing for accurate face masking (default=false)
  -o <string> override image output path
- -l <string> Face detector model (default=y7)
- -n no upsample
+ -l <string> Face detector model (default=y7) (y7,y5,rt(retinaface R50))
+ -h Colorize grayscale photo with Siggraph17 -n no upsample
  -a wait
  -v verbose
 ```
@@ -102,4 +103,4 @@ cmake build ..
 13. <https://github.com/microsoft/onnxruntime>
 
 ## Download Model files (CODEFORMER-GFPGAN-ESRGAN-ncnn-onnx model files)
-https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml/releases/download/1.0.2/models_1_0_2.7z
+https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml/releases/download/1.0.3/models_1_03.7z
