@@ -105,7 +105,6 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
                       (restored_face.channels() == 3) ? CV_8UC3 : CV_8UC4, (void *) bg_upsamplencnn.data);
         upscaled_face = dummy.clone();
 
-        //
         trans_matrix_inv /= ups_f;
         trans_matrix_inv.at<double>(0, 2) *= ups_f;
         trans_matrix_inv.at<double>(1, 2) *= ups_f;
