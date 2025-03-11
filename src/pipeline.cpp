@@ -402,24 +402,12 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
 }
 
 cv::Mat preprocessImage(const cv::Mat &inputImage) {
-    cv::Mat img;
 
-    // 1. Приведение к типу float32 (если изображение загружено, например, через imread, то оно имеет тип CV_8UC3)
-    inputImage.convertTo(img, CV_32F);
-
-    //// 2. (Опционально) Изменяем размер до 512x512, если требуется
-    // cv::resize(img, img, cv::Size(512, 512), 0, 0, cv::INTER_LINEAR);
-
-    //// 3. Масштабирование в диапазон [0,1]
-    img = img / 255.0;
-
-    //// 4. Конвертация из BGR в RGB
-    cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
-
-    //// 5. Создание blob: cv::dnn::blobFromImage выполняет автоматическую перестановку из HWC в CHW
-    ////    Здесь scaleFactor равен 1.0, поскольку мы уже делим на 255.
-    ////    Параметр swapRB установлен в false, так как мы уже перевели в RGB.
-    cv::Mat blob = cv::dnn::blobFromImage(img, 1.0, cv::Size(), cv::Scalar(), false, false, CV_32F);
+    // Создание blob: cv::dnn::blobFromImage выполняет автоматическую перестановку из HWC в CHW
+    // Здесь scaleFactor равен 1.0, поскольку мы уже делим на 255.
+    // Параметр swapRB установлен в false, так как мы уже перевели в RGB.
+    // Приведение к типу float32 (если изображение загружено, например, через imread, то оно имеет тип CV_8UC3)
+    cv::Mat blob = cv::dnn::blobFromImage(inputImage, 1.0 / 255.0, cv::Size(), cv::Scalar(), true, false, CV_32F);
     // Теперь blob имеет форму [1, 3, H, W] (NCHW)
 
     //// 6. Нормализация: операция (img - 0.5)/0.5 равносильна (2*img - 1)
@@ -432,22 +420,10 @@ cv::Mat preprocessImage(const cv::Mat &inputImage) {
 
 // Функция postProcessImage преобразует выходной тензор модели в cv::Mat.
 cv::Mat postProcessImage(const float *outputData, const std::vector<int64_t> &outputShape) {
-    // Ожидаем, что выход имеет форму [N, C, H, W]
-    if (outputShape.size() != 4) {
-        fprintf(stderr, "Expected output tensor shape with 4 dimensions (N, C, H, W).");
-    }
-
     int N = static_cast<int>(outputShape[0]);
     int C = static_cast<int>(outputShape[1]);
     int H = static_cast<int>(outputShape[2]);
     int W = static_cast<int>(outputShape[3]);
-
-    if (N != 1) {
-        fprintf(stderr, "postProcessImage supports only batch size of 1.");
-    }
-    if (C != 3) {
-        fprintf(stderr, "postProcessImage supports only 3-channel output.");
-    }
 
     // Размер каждого канала
     size_t channelSize = static_cast<size_t>(H * W);
@@ -468,7 +444,7 @@ cv::Mat postProcessImage(const float *outputData, const std::vector<int64_t> &ou
     // Преобразуем значения из диапазона [-1, 1] в [0, 255].
     // Формула: image_out = (image + 1) / 2 * 255
     image = (image + 1.0f) / 2.0f * 255.0f;
-    image.convertTo(image, CV_8UC3);
+    image.convertTo(image, (C == 3) ? CV_8UC3 : CV_8UC4);
 
     // Если требуется, преобразуем изображение из RGB в BGR для корректного отображения/сохранения OpenCV
     cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
