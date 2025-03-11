@@ -44,29 +44,35 @@ static wchar_t getopt(int argc, wchar_t *const argv[], const wchar_t *optstring)
 #endif
 
 static void print_usage() {
-    fprintf(stderr, "CXVUSER AI MegaPixel XL Super-Black edition Upscale solution " VER ", Welcome...\n");
-    fprintf(stderr, "This project uses (onnx,ncnn inference) with Vulkan and DirectML compute...\n\n");
-    fprintf(stderr, "Usage: this_binary [options]...\n\n");
-    fprintf(stderr, " -i <img> path to image\n");
-    fprintf(stderr, " -s <digit> model scale factor (default=autodetect)\n");
-    fprintf(stderr, " -j <digit> custom output scale factor\n");
-    fprintf(stderr, " -t <digit> tile size (default=auto)\n");
-    fprintf(stderr, " -f restore faces (default=codeformer)\n");
-    fprintf(stderr, " -m <string> esrgan model name (default=./models/ESRGAN/4xNomos8kSC)\n");
-    fprintf(stderr, " -g <string> gfpgan(or same as gfp) model path (default=./models/face_restore/codeformer_0_1_0.onnx)\n");
-    fprintf(stderr, " -x <digit> face detection threshold (default=0,5) (0,3..0,7 recommended)\n");
-    fprintf(stderr, " -c use CodeFormer face restore model (ncnn)\n");
-    fprintf(stderr, " -d swith face restore infer to onnx\n");
-    fprintf(stderr, " -w <digit> CodeFormer Fidelity (Only onnx) (default=0,7)\n");
-    fprintf(stderr, " -u Face Upsample (after face restore)\n");
-    fprintf(stderr, " -z <string> FaceUpsample model (ESRGAN)\n");
-    fprintf(stderr, " -p Use face parsing for accurate face masking (default=false)\n");
-    fprintf(stderr, " -o <string> override image output path\n");
-    fprintf(stderr, " -l <string> Face detector model (default=y7) (y7,y5,rt(retinaface R50))\n");
-    fprintf(stderr, " -h Colorize grayscale photo with Siggraph17");
-    fprintf(stderr, " -n no upsample\n");
-    fprintf(stderr, " -a wait\n");
-    fprintf(stderr, " -v verbose\n");
+    const char *str = R"(
+CXVUSER AI MegaPixel XL Super-Black edition Upscale solution )" VER R"(, Welcome...
+This project uses (onnx,ncnn inference) with Vulkan and DirectML compute...
+
+Usage: this_binary [options]...
+
+ -i <img> path to image
+ -s <digit> model scale factor (default=autodetect)
+ -j <digit> custom output scale factor
+ -t <digit> tile size (default=auto)
+ -f restore faces (default=codeformer)
+ -m <string> esrgan model name (default=./models/ESRGAN/4xNomos8kSC)
+ -g <string> gfpgan(or same as gfp) model path (default=./models/face_restore/codeformer_0_1_0.onnx)
+ -x <digit> face detection threshold (default=0,5) (0,3..0,7 recommended)
+ -c use CodeFormer face restore model (ncnn)
+ -d swith face restore infer to onnx
+ -w <digit> CodeFormer Fidelity (Only onnx) (default=0,7)
+ -u Face Upsample (after face restore)
+ -z <string> FaceUpsample model (ESRGAN)
+ -p Use face parsing for accurate face masking (default=false)
+ -o <string> override image input path
+ -l <string> Face detector model (default=y7) (y7,y5,rt(retinaface R50))
+ -h Colorize grayscale photo with Siggraph17
+ -n no upsample
+ -a wait
+ -v verbose
+)";
+
+    fprintf(stderr, str);
 };
 
 #if defined(AS_DLL)
@@ -267,7 +273,7 @@ int main(int argc, char **argv)
                         " OpenCV have OpenCL: %d\n"
                         " OpenCV uses OpenCL: %d\n"
                         " OpenCV cpu core uses: %d\n",
-                tilesize ? tilesize : pipe.getEffectiveTilesize(), use_infer_onnx ? 0 : 1, use_infer_onnx, restore_face, (model_scale==0) ? pipe.getModelScale(esr_model): model_scale,
+                tilesize ? tilesize : pipe.getEffectiveTilesize(), use_infer_onnx ? 0 : 1, use_infer_onnx, restore_face, (model_scale == 0) ? pipe.getModelScale(esr_model) : model_scale,
                 upsample, use_codeformer, gfp_modela, esr_modela, ncnn::get_gpu_device(ncnn::get_default_gpu_index())->get_heap_budget(),
                 color, custom_scale, fc_up_, codeformer_fidelity, prob_face_thd, fc_deta, haveOpenCL, useOpenCL, cv::getNumThreads());
     }
@@ -297,7 +303,7 @@ int main(int argc, char **argv)
             else
                 pipeline_config_t.codeformer = false;
         } else {
-                pipeline_config_t.face_model = face_restore_model_onnx;
+            pipeline_config_t.face_model = face_restore_model_onnx;
         }
     }
 

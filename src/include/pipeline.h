@@ -16,11 +16,12 @@ typedef struct _PipelineConfig {
     bool face_upsample = false;
     bool face_restore = true;
     float w = 0.7;
-    std::wstring esr_model; //ESRGAN model path
-    std::wstring model_path; //root model path
-    std::wstring fc_up_model; //face upsample model
-    std::wstring face_model; //gfp model
-    std::wstring face_det_model; //face detection model
+    std::wstring esr_model;     // ESRGAN model path
+    std::wstring model_path;    // root model path
+    std::wstring fc_up_model;   // face upsample model
+    std::wstring face_model;    // gfp model
+    std::wstring face_det_model;// face detection model
+    std::wstring colorize_m;    // Color restore model
     int custom_scale = 0;
     int model_scale = 0;
     bool onnx = false;
@@ -28,7 +29,7 @@ typedef struct _PipelineConfig {
     float nms_thr = 0.65f;
     bool codeformer = false;
     bool useParse = false;
-    bool colorize = false;
+    int Colorize = false;
     bool gpu = true;
 } PipelineConfig_t;
 
@@ -76,7 +77,11 @@ enum AI_SettingsOp {
 
     //Change colorization state
     //.colorize in PipelineConfig_t
-    CHANGE_COLOR
+    CHANGE_COLOR,
+
+    // Change colorization (pre/post)
+    //.preColorize .postColorize in PipelineConfig_t
+    CHANGE_COLOR_STATE
 };
 
 #if defined(AS_DLL)

@@ -390,11 +390,11 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
         }
     }
 
-    if (pipe.colorize) {
+    if (pipe.Colorize) {
         color = new ColorSiggraph(pipe.gpu);
 
         fprintf(stderr, "Loading colorization model...\n");
-        color->load(pipe.model_path.c_str());
+        color->load(sessionOptions, pipe.colorize_m);
         fprintf(stderr, "Loading colorization model finished...\n");
     }
 
@@ -529,36 +529,46 @@ cv::Mat PipeLine::inferONNXModel(
 }
 
 cv::Mat PipeLine::Apply(const cv::Mat &input_img) {
-    cv::Mat imgd = input_img.clone();
-    cv::Mat bg_upsample_ocv;
-    cv::UMat bg_upsample_ocv_u;
+    crops.clear();
+    cv::Mat img_input = input_img.clone();
+    cv::Mat img_upsample;
+    cv::UMat img_upsample_umat;
+    cv::Mat img_alpha;
+
+    if (img_input.channels() == 4) {
+        cv::extractChannel(img_input, img_alpha, 3);
+        cv::cvtColor(img_input, img_input, cv::COLOR_BGRA2BGR);
+    }
+
+    if (1 == pipe.Colorize)
+        color->process(img_input, img_input);
 
     if (pipe.bg_upsample) {
-        ncnn::Mat bg_upsample_ncnn(imgd.cols * pipe.model_scale, imgd.rows * pipe.model_scale,
-                                   (size_t) imgd.channels(), imgd.channels());
+        ncnn::Mat bg_upsample(img_input.cols * pipe.model_scale, img_input.rows * pipe.model_scale,
+                                   (size_t) img_input.channels(), img_input.channels());
 
-        ncnn::Mat bg_presample_ncnn(imgd.cols, imgd.rows, (void *) imgd.data,
-                                    (size_t) imgd.channels(), imgd.channels());
+        ncnn::Mat bg_input(img_input.cols, img_input.rows, (void *) img_input.data,
+                                    (size_t) img_input.channels(), img_input.channels());
 
         fwprintf(stderr, L"Upscale image...\n");
-        bg_upsample_md->process(bg_presample_ncnn, bg_upsample_ncnn);
+        bg_upsample_md->process(bg_input, bg_upsample);
         fwprintf(stderr, L"Upscale image finished...\n");
 
-        cv::Mat dummy(imgd.rows * pipe.model_scale, imgd.cols * pipe.model_scale,
-                      (imgd.channels() == 3) ? CV_8UC3 : CV_8UC4, (void *) bg_upsample_ncnn.data);
-        bg_upsample_ocv = dummy.clone();
+        cv::Mat dummy(img_input.rows * pipe.model_scale, img_input.cols * pipe.model_scale,
+                      CV_8UC3, (void *) bg_upsample.data);
+        img_upsample = dummy.clone();
 
         if (pipe.custom_scale) {
-            bg_upsample_ocv_u = bg_upsample_ocv.getUMat(cv::ACCESS_RW);
-            cv::resize(bg_upsample_ocv_u, bg_upsample_ocv_u, cv::Size(imgd.cols * pipe.custom_scale, imgd.rows * pipe.custom_scale), 0, 0, cv::InterpolationFlags::INTER_LINEAR);
-            bg_upsample_ocv = bg_upsample_ocv_u.getMat(cv::ACCESS_RW).clone();
+            img_upsample_umat = img_upsample.getUMat(cv::ACCESS_RW);
+            cv::resize(img_upsample_umat, img_upsample_umat, cv::Size(img_input.cols * pipe.custom_scale, img_input.rows * pipe.custom_scale), 0, 0, cv::InterpolationFlags::INTER_LANCZOS4);
+            img_upsample = img_upsample_umat.getMat(cv::ACCESS_RW).clone();
         }
     } else {
-        bg_upsample_ocv = imgd.clone();
+        img_upsample = img_input.clone();
         if (pipe.custom_scale) {
-            bg_upsample_ocv_u = bg_upsample_ocv.getUMat(cv::ACCESS_RW);
-            cv::resize(bg_upsample_ocv_u, bg_upsample_ocv_u, cv::Size(imgd.cols * pipe.custom_scale, imgd.rows * pipe.custom_scale), 0, 0, cv::InterpolationFlags::INTER_LINEAR);
-            bg_upsample_ocv = bg_upsample_ocv_u.getMat(cv::ACCESS_RW).clone();
+            img_upsample_umat = img_upsample.getUMat(cv::ACCESS_RW);
+            cv::resize(img_upsample_umat, img_upsample_umat, cv::Size(img_input.cols * pipe.custom_scale, img_input.rows * pipe.custom_scale), 0, 0, cv::InterpolationFlags::INTER_LANCZOS4);
+            img_upsample = img_upsample_umat.getMat(cv::ACCESS_RW).clone();
         }
     }
 
@@ -566,26 +576,26 @@ cv::Mat PipeLine::Apply(const cv::Mat &input_img) {
 
         PipeResult_t pipe_result;
         fwprintf(stderr, L"Detecting faces...\n");
-        face_detector->Process(input_img, (void *) &pipe_result);
+        face_detector->Process(img_input, (void *) &pipe_result);
         fwprintf(stderr, L"Detected %d faces\n", pipe_result.face_count);
-        crops.clear();
+
         for (int i = 0; i != pipe_result.face_count; ++i) {
             fwprintf(stderr, L"%s process %d face...\n", getfilew((wchar_t *) pipe.face_model.c_str()), i + 1);
-            crops.push_back(pipe_result.object[i].trans_img);
+            crops.push_back(pipe_result.object[i].trans_img.clone());
             if (pipe.onnx) {
                 cv::Mat restored_face = inferONNXModel(
                         pipe_result.object[i].trans_img);
-                crops.push_back(restored_face);
+                crops.push_back(restored_face.clone());
                 fwprintf(stderr, L"Paste %d face in photo...\n", i + 1);
-                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, bg_upsample_ocv);
+                paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, img_upsample);
             } else {
                 if (pipe.codeformer) {
                     CodeFormerResult_t res;
                     pipe_result.codeformer_result.push_back(res);
                     codeformer_NCNN_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
-                    crops.push_back(pipe_result.codeformer_result[i].restored_face);
+                    crops.push_back(pipe_result.codeformer_result[i].restored_face.clone());
                     fwprintf(stderr, L"Paste %d face in photo...\n", i + 1);
-                    paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, bg_upsample_ocv);
+                    paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, img_upsample);
 
                 } else {
                     ncnn::Mat gfpgan_result;
@@ -593,17 +603,23 @@ cv::Mat PipeLine::Apply(const cv::Mat &input_img) {
 
                     cv::Mat restored_face;
                     to_ocv(gfpgan_result, restored_face);
-                    crops.push_back(restored_face);
-                    paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, bg_upsample_ocv);
+                    crops.push_back(restored_face.clone());
+                    paste_faces_to_input_image(restored_face, pipe_result.object[i].trans_inv, img_upsample);
                 }
             }
         }
     }
 
-    if (pipe.colorize)
-        color->process(bg_upsample_ocv, bg_upsample_ocv);
+    if (2 == pipe.Colorize)
+        color->process(img_upsample, img_upsample);
 
-    return bg_upsample_ocv.clone();
+    if (!img_alpha.empty()) {
+        cv::resize(img_alpha, img_alpha, cv::Size(img_upsample.cols, img_upsample.rows), 0, 0, cv::InterpolationFlags::INTER_CUBIC);
+        cv::cvtColor(img_upsample, img_upsample, cv::COLOR_BGR2BGRA);
+        cv::insertChannel(img_alpha, img_upsample, 3);
+    }
+
+    return img_upsample.clone();
 }
 
 PipeLine *PipeLine::getApi() {
@@ -857,20 +873,31 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
             }
         } break;
         case AI_SettingsOp::CHANGE_COLOR: {
-            pipe.colorize = cfg.colorize;
+            pipe.Colorize = cfg.Colorize;
+            pipe.colorize_m = cfg.colorize_m;
 
-            if (false == pipe.colorize) {
+            if (0 == pipe.Colorize) {
                 if (color) {
                     delete color;
                     color = nullptr;
                 }
             } else {
+                if (color) {
+                    delete color;
+                    color = nullptr;
+                }
                 color = new ColorSiggraph(pipe.gpu);
 
                 fprintf(stderr, "Loading colorization model...\n");
-                color->load(pipe.model_path.c_str());
+                color->load(sessionOptions, pipe.colorize_m);
                 fprintf(stderr, "Loading colorization model finished...\n");
             }
+        } break;
+        case AI_SettingsOp::CHANGE_COLOR_STATE: {
+            if (pipe.colorize_m.empty())
+                pipe.Colorize = 0;
+            else
+                pipe.Colorize = cfg.Colorize;
         } break;
     }
 };
