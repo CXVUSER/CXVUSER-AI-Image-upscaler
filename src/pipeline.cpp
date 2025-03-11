@@ -4,8 +4,6 @@
 #include <numeric>
 
 #if defined(_WIN32)
-extern unsigned char *wic_decode_image(const wchar_t *filepath, int *w, int *h, int *c);
-extern int wic_encode_image(const wchar_t *filepath, int w, int h, int c, void *bgrdata);
 #include "include\helpers.h"
 #endif
 
