@@ -1,4 +1,4 @@
-﻿// Face restore pipeline
+﻿// Image restore pipeline
 
 #include "include/pipeline.h"
 #include <numeric>
@@ -20,6 +20,17 @@ void PipeLine::Clear() {
         delete env;
     if (ortSession)
         delete ortSession;
+    if (color)
+        delete color;
+    if (bg_upsample_md)
+        delete bg_upsample_md;
+    if (face_up_NCNN_)
+        delete face_up_NCNN_;
+    if (gfpgan_NCNN_)
+        delete gfpgan_NCNN_;
+    if (codeformer_NCNN_)
+        delete codeformer_NCNN_;
+    ncnn::destroy_gpu_instance();
 };
 
 int PipeLine::getModelScale(std::wstring str_bins) {
