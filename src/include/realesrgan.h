@@ -18,8 +18,9 @@ public:
 
     int load(const wchar_t *parampath, const wchar_t *modelpath);
     int process(const ncnn::Mat &inimage, ncnn::Mat &outimage) const;
-    int process_gpu(const ncnn::Mat &inimage, ncnn::Mat &outimage) const;
-    int process_cpu(const ncnn::Mat &inimage, ncnn::Mat &outimage) const;
+    int process_spv(const ncnn::Mat &inimage, ncnn::Mat &outimage) const;
+    int process_no_spv(const ncnn::Mat &inimage, ncnn::Mat &outimage) const;
+    void enableTTA(bool enable);
 
 public:
     // realesrgan parameters

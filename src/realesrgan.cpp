@@ -44,7 +44,7 @@ static const uint32_t realesrgan_postproc_tta_int8s_spv_data[] = {
 };
 
 RealESRGAN::RealESRGAN(bool gpu, bool _tta_mode) {
-    if (gpu) {
+    if (true == gpu) {
         net.opt.use_vulkan_compute = true;
         net.opt.use_fp16_packed = true;
         net.opt.use_fp16_storage = true;
@@ -123,52 +123,51 @@ int RealESRGAN::load(const wchar_t *parampath, const wchar_t *modelpath)
         fclose(fp);
     }
 
-    // initialize preprocess and postprocess pipeline
-    {
-        std::vector<ncnn::vk_specialization_type> specializations(1);
+    if (true == gpu) {
+        // initialize preprocess and postprocess pipeline
+        {
+            std::vector<ncnn::vk_specialization_type> specializations(1);
 #if _WIN32
-        specializations[0].i = 1;
+            specializations[0].i = 1;
 #else
-        specializations[0].i = 0;
+            specializations[0].i = 0;
 #endif
 
-        realesrgan_preproc = new ncnn::Pipeline(net.vulkan_device());
-        realesrgan_preproc->set_optimal_local_size_xyz(32, 32, 3);
+            realesrgan_preproc = new ncnn::Pipeline(net.vulkan_device());
+            realesrgan_preproc->set_optimal_local_size_xyz(32, 32, 3);
 
-        realesrgan_postproc = new ncnn::Pipeline(net.vulkan_device());
-        realesrgan_postproc->set_optimal_local_size_xyz(32, 32, 3);
+            realesrgan_postproc = new ncnn::Pipeline(net.vulkan_device());
+            realesrgan_postproc->set_optimal_local_size_xyz(32, 32, 3);
 
-        if (tta_mode)
-        {
-            if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
-                realesrgan_preproc->create(realesrgan_preproc_tta_int8s_spv_data, sizeof(realesrgan_preproc_tta_int8s_spv_data), specializations);
-            else if (net.opt.use_fp16_storage)
-                realesrgan_preproc->create(realesrgan_preproc_tta_fp16s_spv_data, sizeof(realesrgan_preproc_tta_fp16s_spv_data), specializations);
-            else
-                realesrgan_preproc->create(realesrgan_preproc_tta_spv_data, sizeof(realesrgan_preproc_tta_spv_data), specializations);
+            if (tta_mode) {
+                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
+                    realesrgan_preproc->create(realesrgan_preproc_tta_int8s_spv_data, sizeof(realesrgan_preproc_tta_int8s_spv_data), specializations);
+                else if (net.opt.use_fp16_storage)
+                    realesrgan_preproc->create(realesrgan_preproc_tta_fp16s_spv_data, sizeof(realesrgan_preproc_tta_fp16s_spv_data), specializations);
+                else
+                    realesrgan_preproc->create(realesrgan_preproc_tta_spv_data, sizeof(realesrgan_preproc_tta_spv_data), specializations);
 
-            if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
-                realesrgan_postproc->create(realesrgan_postproc_tta_int8s_spv_data, sizeof(realesrgan_postproc_tta_int8s_spv_data), specializations);
-            else if (net.opt.use_fp16_storage)
-                realesrgan_postproc->create(realesrgan_postproc_tta_fp16s_spv_data, sizeof(realesrgan_postproc_tta_fp16s_spv_data), specializations);
-            else
-                realesrgan_postproc->create(realesrgan_postproc_tta_spv_data, sizeof(realesrgan_postproc_tta_spv_data), specializations);
-        }
-        else
-        {
-            if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
-                realesrgan_preproc->create(realesrgan_preproc_int8s_spv_data, sizeof(realesrgan_preproc_int8s_spv_data), specializations);
-            else if (net.opt.use_fp16_storage)
-                realesrgan_preproc->create(realesrgan_preproc_fp16s_spv_data, sizeof(realesrgan_preproc_fp16s_spv_data), specializations);
-            else
-                realesrgan_preproc->create(realesrgan_preproc_spv_data, sizeof(realesrgan_preproc_spv_data), specializations);
+                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
+                    realesrgan_postproc->create(realesrgan_postproc_tta_int8s_spv_data, sizeof(realesrgan_postproc_tta_int8s_spv_data), specializations);
+                else if (net.opt.use_fp16_storage)
+                    realesrgan_postproc->create(realesrgan_postproc_tta_fp16s_spv_data, sizeof(realesrgan_postproc_tta_fp16s_spv_data), specializations);
+                else
+                    realesrgan_postproc->create(realesrgan_postproc_tta_spv_data, sizeof(realesrgan_postproc_tta_spv_data), specializations);
+            } else {
+                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
+                    realesrgan_preproc->create(realesrgan_preproc_int8s_spv_data, sizeof(realesrgan_preproc_int8s_spv_data), specializations);
+                else if (net.opt.use_fp16_storage)
+                    realesrgan_preproc->create(realesrgan_preproc_fp16s_spv_data, sizeof(realesrgan_preproc_fp16s_spv_data), specializations);
+                else
+                    realesrgan_preproc->create(realesrgan_preproc_spv_data, sizeof(realesrgan_preproc_spv_data), specializations);
 
-            if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
-                realesrgan_postproc->create(realesrgan_postproc_int8s_spv_data, sizeof(realesrgan_postproc_int8s_spv_data), specializations);
-            else if (net.opt.use_fp16_storage)
-                realesrgan_postproc->create(realesrgan_postproc_fp16s_spv_data, sizeof(realesrgan_postproc_fp16s_spv_data), specializations);
-            else
-                realesrgan_postproc->create(realesrgan_postproc_spv_data, sizeof(realesrgan_postproc_spv_data), specializations);
+                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
+                    realesrgan_postproc->create(realesrgan_postproc_int8s_spv_data, sizeof(realesrgan_postproc_int8s_spv_data), specializations);
+                else if (net.opt.use_fp16_storage)
+                    realesrgan_postproc->create(realesrgan_postproc_fp16s_spv_data, sizeof(realesrgan_postproc_fp16s_spv_data), specializations);
+                else
+                    realesrgan_postproc->create(realesrgan_postproc_spv_data, sizeof(realesrgan_postproc_spv_data), specializations);
+            }
         }
     }
 
@@ -216,12 +215,12 @@ int RealESRGAN::load(const wchar_t *parampath, const wchar_t *modelpath)
 int RealESRGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const 
 {
     if (gpu)
-        return process_gpu(inimage, outimage);
+        return process_spv(inimage, outimage);
     else
-        return process_cpu(inimage, outimage);
+        return process_no_spv(inimage, outimage);
 }
 
-int RealESRGAN::process_gpu(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
+int RealESRGAN::process_spv(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
 {
     const unsigned char *pixeldata = (const unsigned char *)inimage.data;
     const int w = inimage.w;
@@ -595,7 +594,7 @@ int RealESRGAN::process_gpu(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
     return 0;
 }
 
-int RealESRGAN::process_cpu(const ncnn::Mat &inimage, ncnn::Mat &outimage) const {
+int RealESRGAN::process_no_spv(const ncnn::Mat &inimage, ncnn::Mat &outimage) const {
     const unsigned char *pixeldata = (const unsigned char *) inimage.data;
     const int w = inimage.w;
     const int h = inimage.h;
@@ -857,4 +856,62 @@ int RealESRGAN::process_cpu(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
     }
 
     return 0;
+}
+
+void RealESRGAN::enableTTA(bool enable) {
+    this->tta_mode = enable;
+
+    if (realesrgan_preproc)
+        delete realesrgan_preproc;
+
+    if (realesrgan_postproc)
+        delete realesrgan_postproc;
+
+    if (true == gpu) {
+        // initialize preprocess and postprocess pipeline
+        {
+            std::vector<ncnn::vk_specialization_type> specializations(1);
+#if _WIN32
+            specializations[0].i = 1;
+#else
+            specializations[0].i = 0;
+#endif
+
+            realesrgan_preproc = new ncnn::Pipeline(net.vulkan_device());
+            realesrgan_preproc->set_optimal_local_size_xyz(32, 32, 3);
+
+            realesrgan_postproc = new ncnn::Pipeline(net.vulkan_device());
+            realesrgan_postproc->set_optimal_local_size_xyz(32, 32, 3);
+
+            if (tta_mode) {
+                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
+                    realesrgan_preproc->create(realesrgan_preproc_tta_int8s_spv_data, sizeof(realesrgan_preproc_tta_int8s_spv_data), specializations);
+                else if (net.opt.use_fp16_storage)
+                    realesrgan_preproc->create(realesrgan_preproc_tta_fp16s_spv_data, sizeof(realesrgan_preproc_tta_fp16s_spv_data), specializations);
+                else
+                    realesrgan_preproc->create(realesrgan_preproc_tta_spv_data, sizeof(realesrgan_preproc_tta_spv_data), specializations);
+
+                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
+                    realesrgan_postproc->create(realesrgan_postproc_tta_int8s_spv_data, sizeof(realesrgan_postproc_tta_int8s_spv_data), specializations);
+                else if (net.opt.use_fp16_storage)
+                    realesrgan_postproc->create(realesrgan_postproc_tta_fp16s_spv_data, sizeof(realesrgan_postproc_tta_fp16s_spv_data), specializations);
+                else
+                    realesrgan_postproc->create(realesrgan_postproc_tta_spv_data, sizeof(realesrgan_postproc_tta_spv_data), specializations);
+            } else {
+                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
+                    realesrgan_preproc->create(realesrgan_preproc_int8s_spv_data, sizeof(realesrgan_preproc_int8s_spv_data), specializations);
+                else if (net.opt.use_fp16_storage)
+                    realesrgan_preproc->create(realesrgan_preproc_fp16s_spv_data, sizeof(realesrgan_preproc_fp16s_spv_data), specializations);
+                else
+                    realesrgan_preproc->create(realesrgan_preproc_spv_data, sizeof(realesrgan_preproc_spv_data), specializations);
+
+                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
+                    realesrgan_postproc->create(realesrgan_postproc_int8s_spv_data, sizeof(realesrgan_postproc_int8s_spv_data), specializations);
+                else if (net.opt.use_fp16_storage)
+                    realesrgan_postproc->create(realesrgan_postproc_fp16s_spv_data, sizeof(realesrgan_postproc_fp16s_spv_data), specializations);
+                else
+                    realesrgan_postproc->create(realesrgan_postproc_spv_data, sizeof(realesrgan_postproc_spv_data), specializations);
+            }
+        }
+    }
 }
