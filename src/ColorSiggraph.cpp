@@ -125,13 +125,13 @@ void ColorSiggraph::process_Siggraph17(const cv::Mat &inimage, cv::Mat &outimage
     Base_img.convertTo(Base_img, CV_32F, 1.0 / 255.0);
 
     //Convert BGR to LAB color space format
-    cvtColor(Base_img, lab, cv::COLOR_BGR2Lab);
+    cv::cvtColor(Base_img, lab, cv::COLOR_BGR2Lab);
 
     //Extract L channel
     cv::extractChannel(lab, L_u, 0);
 
     //Resize to input shape 256x256
-    resize(L_u.getMat(cv::ACCESS_RW), input_img, cv::Size(W_in, H_in));
+    cv::resize(L_u.getMat(cv::ACCESS_RW), input_img, cv::Size(W_in, H_in));
 
     //We subtract 50 from the L channel (for mean centering)
     //input_img -= 50;
@@ -165,7 +165,7 @@ void ColorSiggraph::process_Siggraph17(const cv::Mat &inimage, cv::Mat &outimage
     //merge channels, and convert back to BGR
     cv::Mat chn[] = {L_u.getMat(cv::ACCESS_RW), a, b};
     cv::merge(chn, 3, lab);
-    cvtColor(lab, lab, cv::COLOR_Lab2BGR);
+    cv::cvtColor(lab, lab, cv::COLOR_Lab2BGR);
     //normalize values to 0->255
     lab.convertTo(lab, CV_8UC3, 255);
     lab.copyTo(outimage);
@@ -179,9 +179,7 @@ void ColorSiggraph::process_deoldify(const cv::Mat &inimage, cv::Mat &outimage) 
     // Конвертация в LAB и выделение канала L
     cv::UMat targetLAB, targetL, A, B;
     cv::cvtColor(image, targetLAB, cv::COLOR_BGR2Lab);
-    std::vector<cv::UMat> lab_channels;
-    split(targetLAB, lab_channels);
-    targetL = lab_channels[0].clone();
+    cv::extractChannel(targetLAB, targetL, 0);
 
     // Конвертация в градации серого и обратно в RGB
     cv::cvtColor(image, image, cv::COLOR_BGR2GRAY);
@@ -260,7 +258,7 @@ void ColorSiggraph::process_deoldify(const cv::Mat &inimage, cv::Mat &outimage) 
     // Объединяем каналы в одно изображение формата HWC (RGB)
     cv::UMat colorized;
     cv::merge(channels, colorized);
-    
+
     colorized.convertTo(colorized, CV_8UC3);
     cv::cvtColor(colorized, colorized, cv::COLOR_BGR2RGB);
 
@@ -268,38 +266,32 @@ void ColorSiggraph::process_deoldify(const cv::Mat &inimage, cv::Mat &outimage) 
     cv::resize(colorized, colorized, cv::Size(w, h));
     cv::GaussianBlur(colorized, colorized, cv::Size(13, 13), 0);
 
-    cv::UMat colorzLab;
-    cv::cvtColor(colorized, colorzLab, cv::COLOR_BGR2Lab);
-    cv::split(colorzLab, lab_channels);
-    A = lab_channels[1];
-    B = lab_channels[2];
+    std::vector<cv::UMat> lab_channels;
+    cv::cvtColor(colorized, colorized, cv::COLOR_BGR2Lab);
+    cv::split(colorized, lab_channels);
 
-    cv::UMat a(w, h, CV_8UC1);
-    cv::UMat b(w, h, CV_8UC1);
-
-    cv::resize(lab_channels[1], a, cv::Size(w, h));
-    cv::resize(lab_channels[2], b, cv::Size(w, h));
+    cv::resize(lab_channels[1], lab_channels[1], cv::Size(w, h));
+    cv::resize(lab_channels[2], lab_channels[2], cv::Size(w, h));
 
     // Объединение каналов L из исходного изображения и A, B из colorized
     cv::UMat result;
-    std::vector<cv::UMat> merged_channels = {targetL, a, b};
-    merge(merged_channels, result);
+    std::vector<cv::UMat> merged_channels = {targetL, lab_channels[1], lab_channels[2]};
+    cv::merge(merged_channels, result);
 
-    cvtColor(result, result, cv::COLOR_Lab2BGR);
+    cv::cvtColor(result, result, cv::COLOR_Lab2BGR);
     result.copyTo(outimage);
 }
 
 void ColorSiggraph::process_DDColor(const cv::Mat &inimage, cv::Mat &outimage) const {
     // Загрузка изображения
     cv::UMat image = inimage.clone().getUMat(cv::ACCESS_RW);
-    image.convertTo(image,CV_32F, 1.0 / 255.0);
+    image.convertTo(image, CV_32F, 1.0 / 255.0);
 
     // Конвертация в LAB и выделение канала L
     cv::UMat targetLAB, targetL, A, B;
     cv::cvtColor(image, targetLAB, cv::COLOR_BGR2Lab);
-    std::vector<cv::UMat> lab_channels;
-    split(targetLAB, lab_channels);
-    targetL = lab_channels[0].clone();
+    cv::extractChannel(targetLAB, targetL, 0);
+
     //image.convertTo(image, CV_32F, 100.0 / 255.0); [0.255 -> 0.100]
 
     // Конвертация в градации серого и обратно в RGB
@@ -369,9 +361,9 @@ void ColorSiggraph::process_DDColor(const cv::Mat &inimage, cv::Mat &outimage) c
     // Объединение каналов L из исходного изображения и A, B из colorized
     cv::UMat result;
     std::vector<cv::UMat> merged_channels = {targetL, a, b};
-    merge(merged_channels, result);
+    cv::merge(merged_channels, result);
 
-    cvtColor(result, result, cv::COLOR_Lab2BGR);
+    cv::cvtColor(result, result, cv::COLOR_Lab2BGR);
     result.convertTo(result, CV_8UC3, 255.0);
     result.copyTo(outimage);
 }
