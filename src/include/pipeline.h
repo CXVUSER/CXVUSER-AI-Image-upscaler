@@ -3,16 +3,18 @@
 
 #include "codeformer.h"
 #include "gfpgan.h"
+#include "include/ColorSiggraph.h"
 #include "include/Faceyolov5bl.h"
 #include "include/Faceyolov7_lite_e.h"
 #include "include/helpers.h"
-#include "include/ColorSiggraph.h"
 #include "include/retinaface.h"
 #include "realesrgan.h"
 #include <opencv2\core\ocl.hpp>
 
 typedef struct _PipelineConfig {
     bool bg_upsample = false;
+    bool tta_mode = false;
+    bool twox_mode = false;
     bool face_upsample = false;
     bool face_restore = true;
     float w = 0.7;
@@ -31,6 +33,7 @@ typedef struct _PipelineConfig {
     bool useParse = false;
     int Colorize = false;
     bool gpu = true;
+    int tilesize = 0;
 } PipelineConfig_t;
 
 enum AI_SettingsOp {
@@ -39,7 +42,7 @@ enum AI_SettingsOp {
     //.esr_model in PipelineConfig_t
     //relative or absolute paths without extensions
     CHANGE_ESR = 1,
-    
+
     //Face restore model
     //supports onnx *.onnx files
     //.face_model in PipelineConfig_t
@@ -81,7 +84,11 @@ enum AI_SettingsOp {
 
     // Change colorization (pre/post)
     //.preColorize .postColorize in PipelineConfig_t
-    CHANGE_COLOR_STATE
+    CHANGE_COLOR_STATE,
+
+    // Change ESR bg upsampling settings
+    //.tta_mode .twox_mode
+    CHANGE_ESR_FLAGS
 };
 
 #if defined(AS_DLL)
@@ -94,28 +101,28 @@ CLASS_EXPORT PipeLine {
 public:
     PipeLine();
     ~PipeLine();
-    int CreatePipeLine(PipelineConfig_t &pipeline_config);
-    
+    int CreatePipeLine(PipelineConfig_t & pipeline_config);
+
     cv::Mat Apply(const cv::Mat &input_img);
     static PipeLine *getApi();
     void changeSettings(int type, PipelineConfig_t &cfg);
     int getModelScale(std::wstring str_bins);
     int getEffectiveTilesize();
-    std::vector<cv::Mat>& getCrops();
+    std::vector<cv::Mat> &getCrops();
 
 private:
-    cv::Mat inferONNXModel(
+    cv::Mat inferFaceModel(
             const cv::Mat &input_img);
     void paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &trans_matrix_inv, cv::Mat &bg_upsample);
     void Clear();
-    CodeFormer* codeformer_NCNN_ = nullptr;
+    CodeFormer *codeformer_ncnn = nullptr;
     FaceDetModel *face_detector = nullptr;
-    GFPGAN* gfpgan_NCNN_ = nullptr;//GFPGANCleanv1-NoCE-C2
-    RealESRGAN* face_up_NCNN_ = nullptr;
-    RealESRGAN* bg_upsample_md = nullptr;
+    GFPGAN *gfpgan_ncnn = nullptr;
+    RealESRGAN *face_upsampler = nullptr;
+    RealESRGAN *bg_upsampler = nullptr;
     PipelineConfig_t pipe;
     std::vector<cv::Mat> crops;
-    ncnn::Net parsing_net;
+    ncnn::Net *parsing_net = nullptr;
     ColorSiggraph *color = nullptr;
 
     //ONNX

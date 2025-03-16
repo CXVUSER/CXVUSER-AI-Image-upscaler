@@ -22,14 +22,16 @@ void PipeLine::Clear() {
         delete ortSession;
     if (color)
         delete color;
-    if (bg_upsample_md)
-        delete bg_upsample_md;
-    if (face_up_NCNN_)
-        delete face_up_NCNN_;
-    if (gfpgan_NCNN_)
-        delete gfpgan_NCNN_;
-    if (codeformer_NCNN_)
-        delete codeformer_NCNN_;
+    if (bg_upsampler)
+        delete bg_upsampler;
+    if (face_upsampler)
+        delete face_upsampler;
+    if (gfpgan_ncnn)
+        delete gfpgan_ncnn;
+    if (codeformer_ncnn)
+        delete codeformer_ncnn;
+    if (parsing_net)
+        delete parsing_net;
     ncnn::destroy_gpu_instance();
 };
 
@@ -90,18 +92,25 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
 
     //Add padding for more accuracy determine face location
     if (pipe.custom_scale) {
-        trans_matrix_inv.at<double>(0, 2) += (double) pipe.custom_scale / 2;
-        trans_matrix_inv.at<double>(1, 2) += (double) pipe.custom_scale / 2;
+        trans_matrix_inv.at<double>(0, 2) += (double) 0.5 * (pipe.custom_scale - 1);
+        trans_matrix_inv.at<double>(1, 2) += (double) 0.5 * (pipe.custom_scale - 1);
     } else {
-        trans_matrix_inv.at<double>(0, 2) += (double) pipe.model_scale / 2;
-        trans_matrix_inv.at<double>(1, 2) += (double) pipe.model_scale / 2;
+        if (pipe.bg_upsample) {
+            if (false == pipe.twox_mode) {
+                trans_matrix_inv.at<double>(0, 2) += (double) 0.5 * (pipe.model_scale - 1);
+                trans_matrix_inv.at<double>(1, 2) += (double) 0.5 * (pipe.model_scale - 1);
+            } else {
+                trans_matrix_inv.at<double>(0, 2) += (double) 0.5 * ((pipe.model_scale * pipe.model_scale) - 1);
+                trans_matrix_inv.at<double>(1, 2) += (double) 0.5 * ((pipe.model_scale * pipe.model_scale) - 1);
+            }
+        }
     }
 
     cv::Mat upscaled_face;
 
     double ups_f = 0.0;
     if (pipe.face_upsample) {
-        ups_f = face_up_NCNN_->scale;
+        ups_f = face_upsampler->scale;
         ncnn::Mat bg_presample(restored_face.cols, restored_face.rows, (void *) restored_face.data,
                                (size_t) restored_face.channels(), restored_face.channels());
         ncnn::Mat bg_upsamplencnn(restored_face.cols * ups_f, restored_face.rows * ups_f,
@@ -109,7 +118,7 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
 
         fprintf(stderr, "Upsample face start...\n");
 
-        face_up_NCNN_->process(bg_presample, bg_upsamplencnn);
+        face_upsampler->process(bg_presample, bg_upsamplencnn);
         cv::Mat dummy(bg_upsamplencnn.h, bg_upsamplencnn.w,
                       (restored_face.channels() == 3) ? CV_8UC3 : CV_8UC4, (void *) bg_upsamplencnn.data);
         upscaled_face = dummy.clone();
@@ -117,8 +126,8 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
         trans_matrix_inv /= ups_f;
         trans_matrix_inv.at<double>(0, 2) *= ups_f;
         trans_matrix_inv.at<double>(1, 2) *= ups_f;
-        trans_matrix_inv.at<double>(0, 2) -= ups_f / 2;
-        trans_matrix_inv.at<double>(1, 2) -= ups_f / 2;
+        trans_matrix_inv.at<double>(0, 2) -= 0.5 / (ups_f + 1) + 0.1;
+        trans_matrix_inv.at<double>(1, 2) -= 0.5 / (ups_f + 1) + 0.1;
 
         fprintf(stderr, "Upsample face finish...\n");
     }
@@ -140,13 +149,15 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
 
     cv::Mat mask;
     if (pipe.useParse) {
-        const int target_width = 512;
-        const int target_height = 512;
         const int num_class = 15;
 
-        ncnn::Extractor ex = parsing_net.create_extractor();
+        ncnn::Extractor ex = parsing_net->create_extractor();
         const float mean_vals[3] = {123.675f, 116.28f, 103.53f};
         const float norm_vals[3] = {0.017058f, 0.017439f, 0.017361f};
+
+        //const float mean_vals[3] = {0.485, 0.456, 0.406};
+        //const float norm_vals[3] = {0.229, 0.224, 0.225};
+
         ncnn::Mat ncnn_in = ncnn::Mat::from_pixels(restored_face.data, ncnn::Mat::PIXEL_BGR2RGB, restored_face.cols, restored_face.rows);
 
         ncnn_in.substract_mean_normalize(mean_vals, norm_vals);
@@ -181,6 +192,8 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
         }
 
         cv::dilate(mask, mask, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(50, 50)));
+        cv::GaussianBlur(mask, mask, cv::Size(101, 101), 11);
+        cv::GaussianBlur(mask, mask, cv::Size(101, 101), 11);
         if (pipe.face_upsample)
             cv::resize(mask, mask, ms_size, 0, 0, cv::InterpolationFlags::INTER_LINEAR);
         fprintf(stderr, "Face parsing finished...\n");
@@ -273,6 +286,9 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
     cv::ocl::setUseOpenCL(pipe.gpu);
     ncnn::create_gpu_instance();
 
+    if (0 == pipe.tilesize)
+        pipe.tilesize = getEffectiveTilesize();
+
     if (true == pipe.bg_upsample) {
         std::wstringstream str_param;
         str_param << pipe.esr_model << ".param" << std::ends;
@@ -291,14 +307,14 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
         }
 
         if (pipe.model_scale) {
-            bg_upsample_md = new RealESRGAN(pipe.gpu);
-            bg_upsample_md->scale = pipe.model_scale;
-            bg_upsample_md->prepadding = 10;
+            bg_upsampler = new RealESRGAN(pipe.gpu, pipe.tta_mode);
+            bg_upsampler->scale = pipe.model_scale;
+            bg_upsampler->prepadding = 10;
 
-            bg_upsample_md->tilesize = getEffectiveTilesize();
+            bg_upsampler->tilesize = pipe.tilesize;
 
             fprintf(stderr, "Loading background upsample model...\n");
-            bg_upsample_md->load(str_param.view().data(), str_bin.view().data());
+            bg_upsampler->load(str_param.view().data(), str_bin.view().data());
             fprintf(stderr, "Loading background upsample finished...\n");
         }
     }
@@ -311,17 +327,17 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
         }
     } else {
         if (pipe.codeformer) {
-            codeformer_NCNN_ = new CodeFormer(pipe.gpu);
+            codeformer_ncnn = new CodeFormer(pipe.gpu);
             fprintf(stderr, "Loading codeformer model...\n");
-            int ret = codeformer_NCNN_->Load(pipe.model_path);
+            int ret = codeformer_ncnn->Load(pipe.model_path);
             if (ret < 0) {
                 return -1;
             }
             fprintf(stderr, "Loading codeformer finished...\n");
         } else {
-            gfpgan_NCNN_ = new GFPGAN();
+            gfpgan_ncnn = new GFPGAN();
             fprintf(stderr, "Loading GFPGANCleanv1-NoCE-C2 model from /models/GFPGANCleanv1-NoCE-C2-*...\n");
-            gfpgan_NCNN_->load(pipe.model_path);
+            gfpgan_ncnn->load(pipe.model_path);
             fprintf(stderr, "Loading GFPGANCleanv1-NoCE-C2 model finished...\n");
         }
     }
@@ -347,19 +363,20 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
     }
 
     if (pipe.useParse) {
-        parsing_net.opt.num_threads = ncnn::get_cpu_count();
-        parsing_net.opt.use_vulkan_compute = pipe.gpu;
+        parsing_net = new ncnn::Net();
+        parsing_net->opt.num_threads = ncnn::get_cpu_count();
+        parsing_net->opt.use_vulkan_compute = pipe.gpu;
         std::wstring model_param = pipe.model_path + L"/face_pars/face_parsing.param";
         std::wstring model_bin = pipe.model_path + L"/face_pars/face_parsing.bin";
 
         fwprintf(stderr, L"Loading face parsing model from %s...\n", model_bin.c_str());
 
         FILE *f = _wfopen(model_param.c_str(), L"rb");
-        int ret_param = parsing_net.load_param(f);
+        int ret_param = parsing_net->load_param(f);
         fclose(f);
 
         f = _wfopen(model_bin.c_str(), L"rb");
-        int ret_bin = parsing_net.load_model(f);
+        int ret_bin = parsing_net->load_model(f);
         fclose(f);
         fwprintf(stderr, L"Loading face parsing model finished...\n");
     }
@@ -372,20 +389,20 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
 
         int scale = getModelScale(str_bin.str());
         if (scale) {
-            face_up_NCNN_ = new RealESRGAN(pipe.gpu);
-            face_up_NCNN_->scale = scale;
+            face_upsampler = new RealESRGAN(pipe.gpu);
+            face_upsampler->scale = scale;
         } else {
             pipe.face_upsample = false;
             fprintf(stderr, "Error autodetect scale of this face upscale model please add x[Scale] or [Scale]x to filename of model\n"
                             "Face upscale disabled...");
         }
 
-        if (face_up_NCNN_->scale) {
-            face_up_NCNN_->prepadding = 10;
-            face_up_NCNN_->tilesize = getEffectiveTilesize();
+        if (face_upsampler->scale) {
+            face_upsampler->prepadding = 10;
+            face_upsampler->tilesize = pipe.tilesize;
 
             fprintf(stderr, "Loading face upsample model...\n");
-            face_up_NCNN_->load(str_param.view().data(), str_bin.view().data());
+            face_upsampler->load(str_param.view().data(), str_bin.view().data());
             fprintf(stderr, "Loading face upsample finished...\n");
         }
     }
@@ -452,7 +469,7 @@ cv::Mat postProcessImage(const float *outputData, const std::vector<int64_t> &ou
     return image;
 }
 
-cv::Mat PipeLine::inferONNXModel(
+cv::Mat PipeLine::inferFaceModel(
         const cv::Mat &input_img) {
 
     Ort::AllocatorWithDefaultOptions ortAllocator;
@@ -544,19 +561,36 @@ cv::Mat PipeLine::Apply(const cv::Mat &input_img) {
         color->process(img_input, img_input);
 
     if (pipe.bg_upsample) {
-        ncnn::Mat bg_upsample(img_input.cols * pipe.model_scale, img_input.rows * pipe.model_scale,
-                                   (size_t) img_input.channels(), img_input.channels());
+        int w{img_input.cols * pipe.model_scale}, h{img_input.rows * pipe.model_scale};
+
+        ncnn::Mat bg_upsample(w, h,
+                              (size_t) img_input.channels(), img_input.channels());
 
         ncnn::Mat bg_input(img_input.cols, img_input.rows, (void *) img_input.data,
-                                    (size_t) img_input.channels(), img_input.channels());
+                           (size_t) img_input.channels(), img_input.channels());
 
         fwprintf(stderr, L"Upscale image...\n");
-        bg_upsample_md->process(bg_input, bg_upsample);
+        bg_upsampler->process(bg_input, bg_upsample);
         fwprintf(stderr, L"Upscale image finished...\n");
 
-        cv::Mat dummy(img_input.rows * pipe.model_scale, img_input.cols * pipe.model_scale,
-                      CV_8UC3, (void *) bg_upsample.data);
-        img_upsample = dummy.clone();
+        if (false == pipe.twox_mode) {
+            cv::Mat dummy(h, w,
+                          CV_8UC3, (void *) bg_upsample.data);
+            img_upsample = dummy.clone();
+        } else {
+            int w2{img_input.cols * (pipe.model_scale * pipe.model_scale)}, h2{img_input.rows * (pipe.model_scale * pipe.model_scale)};
+            ncnn::Mat bg_input2(w, h, (void *) bg_upsample.data,
+                                (size_t) img_input.channels(), img_input.channels());
+            ncnn::Mat bg_upsample2(w2, h2,
+                                   (size_t) img_input.channels(), img_input.channels());
+
+            fwprintf(stderr, L"Upscale image 2x...\n");
+            bg_upsampler->process(bg_input2, bg_upsample2);
+            fwprintf(stderr, L"Upscale image 2x finished...\n");
+            cv::Mat dummy(h2, w2,
+                          CV_8UC3, (void *) bg_upsample2.data);
+            img_upsample = dummy.clone();
+        }
 
         if (pipe.custom_scale) {
             img_upsample_umat = img_upsample.getUMat(cv::ACCESS_RW);
@@ -583,7 +617,7 @@ cv::Mat PipeLine::Apply(const cv::Mat &input_img) {
             fwprintf(stderr, L"%s process %d face...\n", getfilew((wchar_t *) pipe.face_model.c_str()), i + 1);
             crops.push_back(pipe_result.object[i].trans_img.clone());
             if (pipe.onnx) {
-                cv::Mat restored_face = inferONNXModel(
+                cv::Mat restored_face = inferFaceModel(
                         pipe_result.object[i].trans_img);
                 crops.push_back(restored_face.clone());
                 fwprintf(stderr, L"Paste %d face in photo...\n", i + 1);
@@ -592,14 +626,14 @@ cv::Mat PipeLine::Apply(const cv::Mat &input_img) {
                 if (pipe.codeformer) {
                     CodeFormerResult_t res;
                     pipe_result.codeformer_result.push_back(res);
-                    codeformer_NCNN_->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
+                    codeformer_ncnn->Process(pipe_result.object[i].trans_img, pipe_result.codeformer_result[i]);
                     crops.push_back(pipe_result.codeformer_result[i].restored_face.clone());
                     fwprintf(stderr, L"Paste %d face in photo...\n", i + 1);
                     paste_faces_to_input_image(pipe_result.codeformer_result[i].restored_face, pipe_result.object[i].trans_inv, img_upsample);
 
                 } else {
                     ncnn::Mat gfpgan_result;
-                    gfpgan_NCNN_->process(pipe_result.object[i].trans_img, gfpgan_result);
+                    gfpgan_ncnn->process(pipe_result.object[i].trans_img, gfpgan_result);
 
                     cv::Mat restored_face;
                     to_ocv(gfpgan_result, restored_face);
@@ -631,22 +665,31 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
     switch (type) {//Change ESR
         case AI_SettingsOp::CHANGE_ESR: {
             bool succ = false;
-            if (bg_upsample_md) {
-                delete bg_upsample_md;
-                bg_upsample_md = nullptr;
+            if (bg_upsampler) {
+                delete bg_upsampler;
+                bg_upsampler = nullptr;
             }
             if (cfg.esr_model.empty()) {
                 pipe.bg_upsample = false;
                 pipe.model_scale = 0;
-                if (0 == pipe.custom_scale)
-                    face_detector->setScale(pipe.model_scale);
-                else
+                if (0 == pipe.custom_scale) {
+                    if (false == pipe.twox_mode)
+                        face_detector->setScale(pipe.model_scale);
+                    else
+                        face_detector->setScale(pipe.model_scale * pipe.model_scale);
+                } else
                     face_detector->setScale(cfg.custom_scale);
                 return;
             }
 
             pipe.esr_model = cfg.esr_model;
             pipe.model_scale = cfg.model_scale;
+            pipe.tta_mode = cfg.tta_mode;
+
+            if (0 != cfg.tilesize)
+                pipe.tilesize = cfg.tilesize;
+            else
+                pipe.tilesize = getEffectiveTilesize();
 
             std::wstringstream str_param;
             str_param << pipe.esr_model << ".param" << std::ends;
@@ -657,8 +700,8 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
                 int scale = getModelScale(str_bin.str());
 
                 if (scale) {
-                    bg_upsample_md = new RealESRGAN(pipe.gpu);
-                    bg_upsample_md->scale = scale;
+                    bg_upsampler = new RealESRGAN(pipe.gpu, pipe.tta_mode);
+                    bg_upsampler->scale = scale;
                     pipe.bg_upsample = true;
                     succ = true;
                 } else {
@@ -667,26 +710,29 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
                                      "bg upscale disabled...");
                 }
             } else {
-                bg_upsample_md = new RealESRGAN(pipe.gpu);
-                bg_upsample_md->scale = pipe.model_scale;
+                bg_upsampler = new RealESRGAN(pipe.gpu, pipe.tta_mode);
+                bg_upsampler->scale = pipe.model_scale;
                 pipe.bg_upsample = true;
                 succ = true;
             }
 
             if (succ)
-                if (bg_upsample_md->scale) {
-                    bg_upsample_md->prepadding = 10;
-                    pipe.model_scale = bg_upsample_md->scale;
+                if (bg_upsampler->scale) {
+                    bg_upsampler->prepadding = 10;
+                    pipe.model_scale = bg_upsampler->scale;
 
-                    bg_upsample_md->tilesize = getEffectiveTilesize();
+                    bg_upsampler->tilesize = pipe.tilesize;
 
-                    if (0 == pipe.custom_scale)
-                        face_detector->setScale(pipe.model_scale);
-                    else
+                    if (0 == pipe.custom_scale) {
+                        if (false == pipe.twox_mode)
+                            face_detector->setScale(pipe.model_scale);
+                        else
+                            face_detector->setScale(pipe.model_scale * pipe.model_scale);
+                    } else
                         face_detector->setScale(cfg.custom_scale);
 
                     fwprintf(stderr, L"Loading background upsample model...\n");
-                    bg_upsample_md->load(str_param.view().data(), str_bin.view().data());
+                    bg_upsampler->load(str_param.view().data(), str_bin.view().data());
                     fwprintf(stderr, L"Loading background upsample finished...\n");
                 }
         } break;
@@ -737,18 +783,21 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
                 face_detector = new FaceR(pipe.gpu);
 
             int ret = face_detector->Load(pipe.model_path);
-            if (pipe.custom_scale)
+            if (0 == pipe.custom_scale) {
+                if (false == pipe.twox_mode)
+                    face_detector->setScale(pipe.model_scale);
+                else
+                    face_detector->setScale(pipe.model_scale * pipe.model_scale);
+            } else
                 face_detector->setScale(pipe.custom_scale);
-            else
-                face_detector->setScale(pipe.model_scale);
 
             face_detector->setThreshold(pipe.prob_thr, pipe.nms_thr);
         } break;
         case AI_SettingsOp::CHANGE_FACE_UP_M: {//Change face upsample
             if (cfg.fc_up_model.empty()) {
-                if (face_up_NCNN_) {
-                    delete face_up_NCNN_;
-                    face_up_NCNN_ = nullptr;
+                if (face_upsampler) {
+                    delete face_upsampler;
+                    face_upsampler = nullptr;
                     pipe.fc_up_model = L"";
                 }
                 pipe.face_upsample = false;
@@ -757,9 +806,14 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
             pipe.face_upsample = true;
             pipe.fc_up_model = cfg.fc_up_model;
 
-            if (face_up_NCNN_) {
-                delete face_up_NCNN_;
-                face_up_NCNN_ = nullptr;
+            if (0 != cfg.tilesize)
+                pipe.tilesize = cfg.tilesize;
+            else
+                pipe.tilesize = getEffectiveTilesize();
+
+            if (face_upsampler) {
+                delete face_upsampler;
+                face_upsampler = nullptr;
             }
 
             std::wstringstream str_param;
@@ -770,13 +824,13 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
             int scale = getModelScale(str_bin.str());
 
             if (scale) {
-                face_up_NCNN_ = new RealESRGAN(pipe.gpu);
-                face_up_NCNN_->scale = scale;
-                face_up_NCNN_->prepadding = 10;
-                face_up_NCNN_->tilesize = getEffectiveTilesize();
+                face_upsampler = new RealESRGAN(pipe.gpu);
+                face_upsampler->scale = scale;
+                face_upsampler->prepadding = 10;
+                face_upsampler->tilesize = pipe.tilesize;
 
                 fwprintf(stderr, L"Loading face upsample model...\n");
-                face_up_NCNN_->load(str_param.view().data(), str_bin.view().data());
+                face_upsampler->load(str_param.view().data(), str_bin.view().data());
                 fwprintf(stderr, L"Loading face upsample finished...\n");
             } else {
                 pipe.face_upsample = false;
@@ -787,9 +841,12 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
         } break;
         case AI_SettingsOp::CHANGE_SCALE_FACTOR: {//Override scale factor
             pipe.custom_scale = cfg.custom_scale;
-            if (0 == cfg.custom_scale)
-                face_detector->setScale(pipe.model_scale);
-            else
+            if (0 == cfg.custom_scale) {
+                if (false == pipe.twox_mode)
+                    face_detector->setScale(pipe.model_scale);
+                else
+                    face_detector->setScale(pipe.model_scale * pipe.model_scale);
+            } else
                 face_detector->setScale(cfg.custom_scale);
         } break;
         case AI_SettingsOp::CHANGE_CODEFORMER_FID: {//Change codeformer fidelity
@@ -804,23 +861,27 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
 
             if (false == cfg.useParse) {
                 pipe.useParse = false;
-                parsing_net.clear();
+                if (parsing_net) {
+                    parsing_net->clear();
+                    delete parsing_net;
+                    parsing_net = nullptr;
+                }
             } else {
                 pipe.useParse = true;
-
-                parsing_net.opt.num_threads = ncnn::get_cpu_count();
-                parsing_net.opt.use_vulkan_compute = pipe.gpu;
+                parsing_net = new ncnn::Net();
+                parsing_net->opt.num_threads = ncnn::get_cpu_count();
+                parsing_net->opt.use_vulkan_compute = pipe.gpu;
                 std::wstring model_param = pipe.model_path + L"/face_pars/face_parsing.param";
                 std::wstring model_bin = pipe.model_path + L"/face_pars/face_parsing.bin";
 
                 fwprintf(stderr, L"Loading face parsing model from %s...\n", model_bin.c_str());
 
                 FILE *f = _wfopen(model_param.c_str(), L"rb");
-                int ret_param = parsing_net.load_param(f);
+                int ret_param = parsing_net->load_param(f);
                 fclose(f);
 
                 f = _wfopen(model_bin.c_str(), L"rb");
-                int ret_bin = parsing_net.load_model(f);
+                int ret_bin = parsing_net->load_model(f);
                 fclose(f);
                 fwprintf(stderr, L"Loading face parsing model finished...\n");
             }
@@ -831,44 +892,44 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
 
             if (false == pipe.onnx) {
                 if (pipe.codeformer) {
-                    if (codeformer_NCNN_) {
-                        delete codeformer_NCNN_;
-                        codeformer_NCNN_ = nullptr;
+                    if (codeformer_ncnn) {
+                        delete codeformer_ncnn;
+                        codeformer_ncnn = nullptr;
                     }
-                    if (gfpgan_NCNN_) {
-                        delete gfpgan_NCNN_;
-                        gfpgan_NCNN_ = nullptr;
+                    if (gfpgan_ncnn) {
+                        delete gfpgan_ncnn;
+                        gfpgan_ncnn = nullptr;
                     }
 
-                    codeformer_NCNN_ = new CodeFormer(pipe.gpu);
+                    codeformer_ncnn = new CodeFormer(pipe.gpu);
 
                     fprintf(stderr, "Loading codeformer model...\n");
-                    int ret = codeformer_NCNN_->Load(pipe.model_path);
+                    int ret = codeformer_ncnn->Load(pipe.model_path);
                     fprintf(stderr, "Loading codeformer finished...\n");
                 } else {
-                    if (gfpgan_NCNN_) {
-                        delete gfpgan_NCNN_;
-                        gfpgan_NCNN_ = nullptr;
+                    if (gfpgan_ncnn) {
+                        delete gfpgan_ncnn;
+                        gfpgan_ncnn = nullptr;
                     }
-                    if (codeformer_NCNN_) {
-                        delete codeformer_NCNN_;
-                        codeformer_NCNN_ = nullptr;
+                    if (codeformer_ncnn) {
+                        delete codeformer_ncnn;
+                        codeformer_ncnn = nullptr;
                     }
 
-                    gfpgan_NCNN_ = new GFPGAN();
+                    gfpgan_ncnn = new GFPGAN();
 
                     fprintf(stderr, "Loading GFPGANCleanv1-NoCE-C2 model from /models/GFPGANCleanv1-NoCE-C2-*...\n");
-                    gfpgan_NCNN_->load(pipe.model_path);
+                    gfpgan_ncnn->load(pipe.model_path);
                     fprintf(stderr, "Loading GFPGANCleanv1-NoCE-C2 model finished...\n");
                 }
             } else {
-                if (gfpgan_NCNN_) {
-                    delete gfpgan_NCNN_;
-                    gfpgan_NCNN_ = nullptr;
+                if (gfpgan_ncnn) {
+                    delete gfpgan_ncnn;
+                    gfpgan_ncnn = nullptr;
                 }
-                if (codeformer_NCNN_) {
-                    delete codeformer_NCNN_;
-                    codeformer_NCNN_ = nullptr;
+                if (codeformer_ncnn) {
+                    delete codeformer_ncnn;
+                    codeformer_ncnn = nullptr;
                 }
             }
         } break;
@@ -898,6 +959,23 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
                 pipe.Colorize = 0;
             else
                 pipe.Colorize = cfg.Colorize;
+        } break;
+        case AI_SettingsOp::CHANGE_ESR_FLAGS: {
+
+            if (true == pipe.bg_upsample) {
+                pipe.tta_mode = cfg.tta_mode;
+                pipe.twox_mode = cfg.twox_mode;
+
+                bg_upsampler->enableTTA(pipe.tta_mode);
+
+                if (0 == pipe.custom_scale) {
+                    if (false == pipe.twox_mode)
+                        face_detector->setScale(pipe.model_scale);
+                    else
+                        face_detector->setScale(pipe.model_scale * pipe.model_scale);
+                } else
+                    face_detector->setScale(cfg.custom_scale);
+            }
         } break;
     }
 };
