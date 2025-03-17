@@ -14,7 +14,6 @@ public:
     FaceR(bool gpu = true);
     ~FaceR();
     int Load(const std::wstring &model_path) override;
-    void setScale(int scale_);
     void setThreshold(float prob_threshold_, float nms_threshold_);
     int Process(const cv::Mat &bgr, void *result) override;
 
@@ -33,7 +32,6 @@ private:
     const float norm_vals_[3] = {1 / 255.0f, 1 / 255.0f, 1 / 255.0f};
     std::vector<cv::Point2f> face_template;
     ncnn::Net net_;
-    int scale;
     bool gpu;
     std::vector<int> input_indexes_;
     std::vector<int> output_indexes_;

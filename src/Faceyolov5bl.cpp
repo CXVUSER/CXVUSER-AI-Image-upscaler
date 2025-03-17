@@ -157,11 +157,6 @@ generate_proposals(const ncnn::Mat &anchors, int stride, const ncnn::Mat &in_pad
     }
 }
 
-void Face_yolov5_bl::setScale(int scale_) {
-    this->scale = scale_;
-    return;
-}
-
 void Face_yolov5_bl::setThreshold(float prob_threshold_, float nms_threshold_) {
     this->prob_threshold = prob_threshold_;
     this->nms_threshold = nms_threshold_;
@@ -233,8 +228,7 @@ int Face_yolov5_bl::align_warp_face(const cv::Mat &img, Object_t &objects) {
 
     cv::Mat affine_matrix_inv;
     cv::invertAffineTransform(affine_matrix, affine_matrix_inv);
-    if (scale)
-        affine_matrix_inv *= scale;
+
     affine_matrix_inv.copyTo(objects.trans_inv);
     cropped_face.copyTo(objects.trans_img);
 

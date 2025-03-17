@@ -9,7 +9,6 @@ public:
     ~Faceyolov7_lite_e();
     int Load(const std::wstring &model_path) override;
     int Process(const cv::Mat &input_img, void *result) override;
-    void setScale(int scale_);
     void setThreshold(float prob_threshold_, float nms_threshold_);
 
 protected:
@@ -27,7 +26,6 @@ private:
     const float norm_vals_[3] = {1 / 255.0f, 1 / 255.0f, 1 / 255.0f};
     std::vector<cv::Point2f> face_template;
     ncnn::Net net_;
-    int scale;
     std::vector<int> input_indexes_;
     std::vector<int> output_indexes_;
 };

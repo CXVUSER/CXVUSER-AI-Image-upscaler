@@ -27,7 +27,6 @@ public:
     int Process(const cv::Mat &input_img, void *result) override;
     int align_warp_face(const cv::Mat &img, Object_t &objects);
     void draw_objects(const cv::Mat &bgr, const std::vector<Object> &objects);
-    void setScale(int scale_);
     void setThreshold(float prob_threshold_, float nms_threshold_);
 
 protected:
@@ -39,7 +38,6 @@ private:
     ncnn::Net net;
     float prob_threshold;
     float nms_threshold;
-    int scale;
 };
 
 #endif// FACE_YOLOV5_BL

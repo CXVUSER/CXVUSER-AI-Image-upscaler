@@ -230,11 +230,6 @@ FaceR::~FaceR() {
     net_.clear();
 }
 
-void FaceR::setScale(int scale_) {
-    this->scale = scale_;
-    return;
-}
-
 void FaceR::setThreshold(float prob_threshold_, float nms_threshold_) {
     this->prob_threshold = prob_threshold_;
     this->nms_threshold = nms_threshold_;
@@ -409,8 +404,7 @@ void FaceR::AlignFace(const cv::Mat &img, Object_t &objects) {
 
     cv::Mat affine_matrix_inv;
     cv::invertAffineTransform(affine_matrix, affine_matrix_inv);
-    if (scale)
-        affine_matrix_inv *= scale;
+
     affine_matrix_inv.copyTo(objects.trans_inv);
     cropped_face.copyTo(objects.trans_img);
 }

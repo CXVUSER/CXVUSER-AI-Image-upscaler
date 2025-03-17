@@ -155,11 +155,6 @@ static void generate_proposals(const ncnn::Mat &anchors, int stride, int pad_h, 
     }
 }
 
-void Faceyolov7_lite_e::setScale(int scale_) {
-    this->scale = scale_;
-    return;
-}
-
 void Faceyolov7_lite_e::setThreshold(float prob_threshold_, float nms_threshold_) {
     this->prob_threshold = prob_threshold_;
     this->nms_threshold = nms_threshold_;
@@ -294,8 +289,6 @@ void Faceyolov7_lite_e::AlignFace(const cv::Mat &img, Object_t &object) {
 
     cv::Mat affine_matrix_inv;
     cv::invertAffineTransform(affine_matrix, affine_matrix_inv);
-    if (scale)
-        affine_matrix_inv *= scale;
 
     affine_matrix_inv.copyTo(object.trans_inv);
     cropped_face.copyTo(object.trans_img);

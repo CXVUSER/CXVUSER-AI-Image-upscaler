@@ -90,15 +90,19 @@ static void to_ocv(const ncnn::Mat &result, cv::Mat &out) {
 void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat &trans_matrix_inv, cv::Mat &bg_upsample) {
 
     //Add padding for more accuracy determine face location
+
     if (pipe.custom_scale) {
+        trans_matrix_inv *= pipe.custom_scale;
         trans_matrix_inv.at<double>(0, 2) += (double) 0.5 * (pipe.custom_scale - 1);
         trans_matrix_inv.at<double>(1, 2) += (double) 0.5 * (pipe.custom_scale - 1);
     } else {
         if (pipe.bg_upsample) {
             if (false == pipe.twox_mode) {
+                trans_matrix_inv *= pipe.model_scale;
                 trans_matrix_inv.at<double>(0, 2) += (double) 0.5 * (pipe.model_scale - 1);
                 trans_matrix_inv.at<double>(1, 2) += (double) 0.5 * (pipe.model_scale - 1);
             } else {
+                trans_matrix_inv *= pipe.model_scale * pipe.model_scale;
                 trans_matrix_inv.at<double>(0, 2) += (double) 0.5 * ((pipe.model_scale * pipe.model_scale) - 1);
                 trans_matrix_inv.at<double>(1, 2) += (double) 0.5 * ((pipe.model_scale * pipe.model_scale) - 1);
             }
@@ -353,10 +357,6 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
         if (ret < 0) {
             return -1;
         }
-        if (pipe.custom_scale)
-            face_detector->setScale(pipe.custom_scale);
-        else
-            face_detector->setScale(pipe.model_scale);
 
         face_detector->setThreshold(pipe.prob_thr, pipe.nms_thr);
     }
@@ -671,13 +671,6 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
             if (cfg.esr_model.empty()) {
                 pipe.bg_upsample = false;
                 pipe.model_scale = 0;
-                if (0 == pipe.custom_scale) {
-                    if (false == pipe.twox_mode)
-                        face_detector->setScale(pipe.model_scale);
-                    else
-                        face_detector->setScale(pipe.model_scale * pipe.model_scale);
-                } else
-                    face_detector->setScale(cfg.custom_scale);
                 return;
             }
 
@@ -721,14 +714,6 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
                     pipe.model_scale = bg_upsampler->scale;
 
                     bg_upsampler->tilesize = pipe.tilesize;
-
-                    if (0 == pipe.custom_scale) {
-                        if (false == pipe.twox_mode)
-                            face_detector->setScale(pipe.model_scale);
-                        else
-                            face_detector->setScale(pipe.model_scale * pipe.model_scale);
-                    } else
-                        face_detector->setScale(cfg.custom_scale);
 
                     fwprintf(stderr, L"Loading background upsample model...\n");
                     bg_upsampler->load(str_param.view().data(), str_bin.view().data());
@@ -782,13 +767,6 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
                 face_detector = new FaceR(pipe.gpu);
 
             int ret = face_detector->Load(pipe.model_path);
-            if (0 == pipe.custom_scale) {
-                if (false == pipe.twox_mode)
-                    face_detector->setScale(pipe.model_scale);
-                else
-                    face_detector->setScale(pipe.model_scale * pipe.model_scale);
-            } else
-                face_detector->setScale(pipe.custom_scale);
 
             face_detector->setThreshold(pipe.prob_thr, pipe.nms_thr);
         } break;
@@ -840,13 +818,6 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
         } break;
         case AI_SettingsOp::CHANGE_SCALE_FACTOR: {//Override scale factor
             pipe.custom_scale = cfg.custom_scale;
-            if (0 == cfg.custom_scale) {
-                if (false == pipe.twox_mode)
-                    face_detector->setScale(pipe.model_scale);
-                else
-                    face_detector->setScale(pipe.model_scale * pipe.model_scale);
-            } else
-                face_detector->setScale(cfg.custom_scale);
         } break;
         case AI_SettingsOp::CHANGE_CODEFORMER_FID: {//Change codeformer fidelity
             pipe.w = cfg.w;
@@ -966,14 +937,6 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
                 pipe.twox_mode = cfg.twox_mode;
 
                 bg_upsampler->enableTTA(pipe.tta_mode);
-
-                if (0 == pipe.custom_scale) {
-                    if (false == pipe.twox_mode)
-                        face_detector->setScale(pipe.model_scale);
-                    else
-                        face_detector->setScale(pipe.model_scale * pipe.model_scale);
-                } else
-                    face_detector->setScale(cfg.custom_scale);
             }
         } break;
     }

@@ -56,7 +56,6 @@ public:
     virtual ~FaceDetModel(){};
     virtual int Load(const std::wstring &model_path) = 0;
     virtual int Process(const cv::Mat &input_img, void *result) = 0;
-    virtual void setScale(int scale_) = 0;
     virtual void setThreshold(float prob_threshold_, float nms_threshold_) = 0;
 
 protected:
