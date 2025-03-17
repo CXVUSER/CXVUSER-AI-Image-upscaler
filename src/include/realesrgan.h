@@ -6,14 +6,13 @@
 #include <string>
 
 // ncnn
-#include "net.h"
 #include "gpu.h"
 #include "layer.h"
+#include "net.h"
 
-class RealESRGAN
-{
+class RealESRGAN {
 public:
-    RealESRGAN(bool gpu = true,bool tta_mode = false);
+    RealESRGAN(bool gpu = true, bool tta_mode = false);
     ~RealESRGAN();
 
     int load(const wchar_t *parampath, const wchar_t *modelpath);
@@ -39,4 +38,4 @@ private:
     bool gpu;
 };
 
-#endif // REALESRGAN_H
+#endif// REALESRGAN_H

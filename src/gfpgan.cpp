@@ -122,8 +122,8 @@ static void innerproduct(const ncnn::Mat &in, const float *weight,
 
     // set param
     ncnn::ParamDict pd;
-    pd.set(0, num_output);// num_output
-    pd.set(1, 1);// bias_term
+    pd.set(0, num_output);      // num_output
+    pd.set(1, 1);               // bias_term
     pd.set(2, inc * num_output);// weight_data_size
 
     op->load_param(pd);
@@ -131,7 +131,7 @@ static void innerproduct(const ncnn::Mat &in, const float *weight,
     // set weights
     ncnn::Mat weights[2];
     weights[0].create(inc * num_output);// weight_data
-    weights[1].create(num_output);// bias_data
+    weights[1].create(num_output);      // bias_data
     for (int i = 0; i < num_output; i++) {
         for (int j = 0; j < inc; j++)
             weights[0][i * inc + j] = weight[i * inc + j];
@@ -193,15 +193,15 @@ static void convolution(const ncnn::Mat &in, const float *weight, int inc, int n
 
     // set param
     ncnn::ParamDict pd;
-    pd.set(0, num_output);// num_output
-    pd.set(1, kernel_size);// kernel_w
-    pd.set(5, 0);// bias_term
+    pd.set(0, num_output);                                  // num_output
+    pd.set(1, kernel_size);                                 // kernel_w
+    pd.set(5, 0);                                           // bias_term
     pd.set(6, inc * num_output * kernel_size * kernel_size);// weight_data_size
-    pd.set(7, 1);// group
-    pd.set(4, padding);//pad_left
-    pd.set(14, padding);//pad_top
-    pd.set(15, padding);//pad_right
-    pd.set(16, padding);//pad_bottom
+    pd.set(7, 1);                                           // group
+    pd.set(4, padding);                                     //pad_left
+    pd.set(14, padding);                                    //pad_top
+    pd.set(15, padding);                                    //pad_right
+    pd.set(16, padding);                                    //pad_bottom
 
     op->load_param(pd);
 
@@ -236,7 +236,7 @@ static void scale(const ncnn::Mat &in, const float &scale, int scale_data_size, 
     // set param
     ncnn::ParamDict pd;
     pd.set(0, scale_data_size);// scale_data_size
-    pd.set(1, 0);// bias_term
+    pd.set(1, 0);              // bias_term
 
     op->load_param(pd);
 
@@ -270,7 +270,7 @@ static void upsample(const ncnn::Mat &in, const float &scale, ncnn::Mat &out) {
 
     // set param
     ncnn::ParamDict pd;
-    pd.set(0, 2);// resize_type
+    pd.set(0, 2);    // resize_type
     pd.set(1, scale);// height_scale
     pd.set(2, scale);// width_scale
     op->load_param(pd);
@@ -363,7 +363,6 @@ int GFPGAN::modulated_conv(ncnn::Mat &x, ncnn::Mat &style,
                 }
             }
         }
-
     }
     if (sample_mode == 1) {
         upsample(x, 2.0f, x);
@@ -407,8 +406,7 @@ int GFPGAN::style_convs_modulated_conv(ncnn::Mat &x, ncnn::Mat style, int sample
                                        const float *style_convs_modulated_conv_modulation_weight,
                                        const float *style_convs_modulated_conv_modulation_bias,
                                        const float *style_convs_weight,
-                                       const float *style_convs_bias
-) {
+                                       const float *style_convs_bias) {
     ncnn::Mat conv_out;
     modulated_conv(x, style, (const float *) style_convs_modulated_conv_weight,
                    (const float *) style_convs_modulated_conv_modulation_weight,
@@ -458,7 +456,6 @@ int GFPGAN::load_weights(const wchar_t *model_path, std::vector<StyleConvWeights
         ifs.read((char *) weights.style_convs_bias.data(), sizeof(float) * data_size5);
 
         style_conv_weights.push_back(weights);
-
     }
 
     for (int i = 0; i < 8; i++) {
@@ -484,7 +481,6 @@ int GFPGAN::load_weights(const wchar_t *model_path, std::vector<StyleConvWeights
         ifs.read((char *) weights.to_rgbs_bias.data(), sizeof(float) * data_size4);
 
         to_rgbs_conv_weights.push_back(weights);
-
     }
 
     int const_input_size = 4 * 4 * 512;
@@ -529,13 +525,13 @@ int GFPGAN::load(const std::wstring &path) {
         fwprintf(stderr, L"open bin file %s failed\n", model_path.c_str());
         return -1;
     }
-    
+
     int ret = load_weights(style_path.c_str(), style_conv_weights, to_rgbs_conv_weights, const_input);
     if (ret < 0) {
         fwprintf(stderr, L"open style file %s failed!\n", style_path.c_str());
         return -1;
     }
-    
+
     return 0;
 }
 
@@ -652,7 +648,6 @@ int GFPGAN::process(const cv::Mat &img, ncnn::Mat &outimage) {
 
         i += 2;
         j += 1;
-
     }
     clip(skip, -1.0f, 1.0f);
     outimage = skip;

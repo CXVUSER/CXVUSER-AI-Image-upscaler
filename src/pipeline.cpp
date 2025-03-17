@@ -7,11 +7,10 @@
 #include "include\helpers.h"
 #endif
 
-PipeLine::PipeLine() {
-}
+PipeLine::PipeLine(){};
 PipeLine::~PipeLine() {
     Clear();
-}
+};
 
 void PipeLine::Clear() {
     if (face_detector)
@@ -53,7 +52,7 @@ int PipeLine::getModelScale(std::wstring str_bins) {
         return 16;
 
     return 0;
-}
+};
 
 int PipeLine::getEffectiveTilesize() {
 
@@ -70,7 +69,7 @@ int PipeLine::getEffectiveTilesize() {
     else
         tilesize = 32;
     return tilesize;
-}
+};
 
 static void to_ocv(const ncnn::Mat &result, cv::Mat &out) {
     cv::Mat cv_result_32F = cv::Mat::zeros(cv::Size(512, 512), CV_32FC3);
@@ -243,7 +242,7 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
             img_ptr[w][2] = img_ptr[w][2] * (1 - mask_ptr[w]) + face_ptr[w][2] * mask_ptr[w];
         }
     }
-}
+};
 
 int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
     pipe = pipeline_config;
@@ -416,7 +415,7 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
     }
 
     return 0;
-}
+};
 
 cv::Mat preprocessImage(const cv::Mat &inputImage) {
 
@@ -433,7 +432,7 @@ cv::Mat preprocessImage(const cv::Mat &inputImage) {
 
     //// 7. Blob уже имеет размерность батча (N=1), поэтому дополнительных действий не требуется.
     return blob;
-}
+};
 
 // Функция postProcessImage преобразует выходной тензор модели в cv::Mat.
 cv::Mat postProcessImage(const float *outputData, const std::vector<int64_t> &outputShape) {
@@ -467,7 +466,7 @@ cv::Mat postProcessImage(const float *outputData, const std::vector<int64_t> &ou
     cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
 
     return image;
-}
+};
 
 cv::Mat PipeLine::inferFaceModel(
         const cv::Mat &input_img) {
@@ -543,7 +542,7 @@ cv::Mat PipeLine::inferFaceModel(
     bindings.SynchronizeOutputs();
 
     return postProcessImage((float *) bindings.GetOutputValues()[0].GetTensorRawData(), outputShape);
-}
+};
 
 cv::Mat PipeLine::Apply(const cv::Mat &input_img) {
     crops.clear();
@@ -654,11 +653,11 @@ cv::Mat PipeLine::Apply(const cv::Mat &input_img) {
     }
 
     return img_upsample.clone();
-}
+};
 
 PipeLine *PipeLine::getApi() {
     return new PipeLine();
-}
+};
 
 void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
 
@@ -982,4 +981,4 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
 
 std::vector<cv::Mat> &PipeLine::getCrops() {
     return crops;
-}
+};

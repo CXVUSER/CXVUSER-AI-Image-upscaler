@@ -1,7 +1,7 @@
 #ifndef COLORNET_H_INCLUDED
 #define COLORNET_H_INCLUDED
-#include "include/model.h"
 #include "include/helpers.h"
+#include "include/model.h"
 
 class ColorSiggraph {
 public:
@@ -16,7 +16,6 @@ public:
 
 
 public:
-
 private:
     ncnn::Net net;
     bool gpu;

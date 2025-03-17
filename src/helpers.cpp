@@ -44,47 +44,41 @@ char *getfilea(char *t) {
 
 #if defined(_WIN32)
 std::tuple<Microsoft::WRL::ComPtr<IDXCoreAdapter>, D3D_FEATURE_LEVEL> SelectAdapter(
-    std::string_view adapterNameFilter)
-{
+        std::string_view adapterNameFilter) {
     using Microsoft::WRL::ComPtr;
 
     ComPtr<IDXCoreAdapterFactory> adapterFactory;
     DXCoreCreateAdapterFactory(IID_PPV_ARGS(adapterFactory.GetAddressOf()));
 
-    // First try getting all GENERIC_ML devices, which is the broadest set of adapters 
-    // and includes both GPUs and NPUs; however, running this sample on an older build of 
+    // First try getting all GENERIC_ML devices, which is the broadest set of adapters
+    // and includes both GPUs and NPUs; however, running this sample on an older build of
     // Windows may not have drivers that report GENERIC_ML.
     D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_1_0_GENERIC;
     ComPtr<IDXCoreAdapterList> adapterList;
     adapterFactory->CreateAdapterList(
-        1,
-        &DXCORE_ADAPTER_ATTRIBUTE_D3D12_GENERIC_ML,
-        adapterList.GetAddressOf()
-    );
+            1,
+            &DXCORE_ADAPTER_ATTRIBUTE_D3D12_GENERIC_ML,
+            adapterList.GetAddressOf());
 
     // Fall back to CORE_COMPUTE if GENERIC_ML devices are not available. This is a more restricted
     // set of adapters and may filter out some NPUs.
-    if (adapterList->GetAdapterCount() == 0)
-    {
+    if (adapterList->GetAdapterCount() == 0) {
         featureLevel = D3D_FEATURE_LEVEL_1_0_CORE;
         adapterFactory->CreateAdapterList(
-            1, 
-            &DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE, 
-            adapterList.GetAddressOf()
-        );
+                1,
+                &DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE,
+                adapterList.GetAddressOf());
     }
 
-    if (adapterList->GetAdapterCount() == 0)
-    {
+    if (adapterList->GetAdapterCount() == 0) {
         throw std::runtime_error("No compatible adapters found.");
     }
 
     // Sort the adapters by preference, with hardware and high-performance adapters first.
-    DXCoreAdapterPreference preferences[] = 
-    {
-        DXCoreAdapterPreference::Hardware,
-        DXCoreAdapterPreference::HighPerformance
-    };
+    DXCoreAdapterPreference preferences[] =
+            {
+                    DXCoreAdapterPreference::Hardware,
+                    DXCoreAdapterPreference::HighPerformance};
 
     adapterList->Sort(_countof(preferences), preferences);
 
@@ -92,27 +86,23 @@ std::tuple<Microsoft::WRL::ComPtr<IDXCoreAdapter>, D3D_FEATURE_LEVEL> SelectAdap
     std::vector<std::string> adapterDescriptions;
     std::optional<uint32_t> firstAdapterMatchingNameFilter;
 
-    for (uint32_t i = 0; i < adapterList->GetAdapterCount(); i++)
-    {
+    for (uint32_t i = 0; i < adapterList->GetAdapterCount(); i++) {
         ComPtr<IDXCoreAdapter> adapter;
         adapterList->GetAdapter(i, adapter.GetAddressOf());
 
         size_t descriptionSize;
         adapter->GetPropertySize(
-            DXCoreAdapterProperty::DriverDescription, 
-            &descriptionSize
-        );
+                DXCoreAdapterProperty::DriverDescription,
+                &descriptionSize);
 
         std::string adapterDescription(descriptionSize, '\0');
         adapter->GetProperty(
-            DXCoreAdapterProperty::DriverDescription, 
-            descriptionSize, 
-            adapterDescription.data()
-        );
+                DXCoreAdapterProperty::DriverDescription,
+                descriptionSize,
+                adapterDescription.data());
 
         // Remove trailing null terminator written by DXCore.
-        while (!adapterDescription.empty() && adapterDescription.back() == '\0')
-        {
+        while (!adapterDescription.empty() && adapterDescription.back() == '\0') {
             adapterDescription.pop_back();
         }
 
@@ -120,29 +110,24 @@ std::tuple<Microsoft::WRL::ComPtr<IDXCoreAdapter>, D3D_FEATURE_LEVEL> SelectAdap
         adapterDescriptions.push_back(adapterDescription);
 
         if (!firstAdapterMatchingNameFilter &&
-            adapterDescription.find(adapterNameFilter) != std::string::npos)
-        {
+            adapterDescription.find(adapterNameFilter) != std::string::npos) {
             firstAdapterMatchingNameFilter = i;
             std::cout << "Adapter[" << i << "]: " << adapterDescription << " (SELECTED)\n";
-        }
-        else
-        {
+        } else {
             std::cout << "Adapter[" << i << "]: " << adapterDescription << "\n";
         }
     }
 
-    if (!firstAdapterMatchingNameFilter)
-    {
+    if (!firstAdapterMatchingNameFilter) {
         throw std::invalid_argument("No adapters match the provided name filter.");
     }
 
-    return { adapters[*firstAdapterMatchingNameFilter], featureLevel };
+    return {adapters[*firstAdapterMatchingNameFilter], featureLevel};
 }
 
-std::tuple<Microsoft::WRL::ComPtr<IDMLDevice>, Microsoft::WRL::ComPtr<ID3D12CommandQueue>> CreateDmlDeviceAndCommandQueue(std::string_view adapterNameFilter)
-{
+std::tuple<Microsoft::WRL::ComPtr<IDMLDevice>, Microsoft::WRL::ComPtr<ID3D12CommandQueue>> CreateDmlDeviceAndCommandQueue(std::string_view adapterNameFilter) {
     using Microsoft::WRL::ComPtr;
-    
+
     auto [adapter, featureLevel] = SelectAdapter(adapterNameFilter);
 
     ComPtr<ID3D12Device> d3d12Device;
@@ -151,65 +136,57 @@ std::tuple<Microsoft::WRL::ComPtr<IDMLDevice>, Microsoft::WRL::ComPtr<ID3D12Comm
     ComPtr<IDMLDevice> dmlDevice;
     DMLCreateDevice(d3d12Device.Get(), DML_CREATE_DEVICE_FLAG_NONE, IID_PPV_ARGS(&dmlDevice));
 
-    D3D_FEATURE_LEVEL featureLevelsRequested[] = 
-    {
-        D3D_FEATURE_LEVEL_1_0_GENERIC,
-        D3D_FEATURE_LEVEL_1_0_CORE,
-        D3D_FEATURE_LEVEL_11_0,
-        D3D_FEATURE_LEVEL_11_1,
-        D3D_FEATURE_LEVEL_12_0,
-        D3D_FEATURE_LEVEL_12_1
-    };
+    D3D_FEATURE_LEVEL featureLevelsRequested[] =
+            {
+                    D3D_FEATURE_LEVEL_1_0_GENERIC,
+                    D3D_FEATURE_LEVEL_1_0_CORE,
+                    D3D_FEATURE_LEVEL_11_0,
+                    D3D_FEATURE_LEVEL_11_1,
+                    D3D_FEATURE_LEVEL_12_0,
+                    D3D_FEATURE_LEVEL_12_1};
 
-    D3D12_FEATURE_DATA_FEATURE_LEVELS featureLevelSupport = 
-    {
-        .NumFeatureLevels = _countof(featureLevelsRequested),
-        .pFeatureLevelsRequested = featureLevelsRequested
-    };
+    D3D12_FEATURE_DATA_FEATURE_LEVELS featureLevelSupport =
+            {
+                    .NumFeatureLevels = _countof(featureLevelsRequested),
+                    .pFeatureLevelsRequested = featureLevelsRequested};
 
     d3d12Device->CheckFeatureSupport(
-        D3D12_FEATURE_FEATURE_LEVELS,
-        &featureLevelSupport,
-        sizeof(featureLevelSupport)
-    );
+            D3D12_FEATURE_FEATURE_LEVELS,
+            &featureLevelSupport,
+            sizeof(featureLevelSupport));
 
     // The feature level returned by SelectAdapter is the MINIMUM feature level required for the adapter.
     // However, some adapters may support higher feature levels. For compatibility reasons, this sample
     // uses a direct queue for graphics-capable adapters that support feature levels > CORE.
-    auto queueType = (featureLevelSupport.MaxSupportedFeatureLevel <= D3D_FEATURE_LEVEL_1_0_CORE) ? 
-        D3D12_COMMAND_LIST_TYPE_COMPUTE : 
-        D3D12_COMMAND_LIST_TYPE_DIRECT;
+    auto queueType = (featureLevelSupport.MaxSupportedFeatureLevel <= D3D_FEATURE_LEVEL_1_0_CORE) ? D3D12_COMMAND_LIST_TYPE_COMPUTE : D3D12_COMMAND_LIST_TYPE_DIRECT;
 
-    D3D12_COMMAND_QUEUE_DESC queueDesc = 
-    {
-        .Type = queueType,
-        .Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
-        .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE,
-        .NodeMask = 0
-    };
+    D3D12_COMMAND_QUEUE_DESC queueDesc =
+            {
+                    .Type = queueType,
+                    .Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
+                    .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE,
+                    .NodeMask = 0};
 
     ComPtr<ID3D12CommandQueue> commandQueue;
     d3d12Device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&commandQueue));
 
-    return { std::move(dmlDevice), std::move(commandQueue) };
+    return {std::move(dmlDevice), std::move(commandQueue)};
 }
 #endif
 
 // Converts a pixel buffer to an NCHW tensor (batch size 1).
 // Source: buffer of RGB pixels (HWC) using uint8 components.
 // Target: buffer of RGB planes (CHW) using float32/float16 components.
-template <typename T> 
+template<typename T>
 void CopyPixelsToTensor(
-    std::span<const std::byte> src, 
-    std::span<std::byte> dst,
-    uint32_t height,
-    uint32_t width,
-    uint32_t channels)
-{
-    std::span<T> dstT(reinterpret_cast<T*>(dst.data()), dst.size_bytes() / sizeof(T));
+        std::span<const std::byte> src,
+        std::span<std::byte> dst,
+        uint32_t height,
+        uint32_t width,
+        uint32_t channels) {
+    std::span<T> dstT(reinterpret_cast<T *>(dst.data()), dst.size_bytes() / sizeof(T));
 
-    for (size_t pixelIndex = 0; pixelIndex < height * width; pixelIndex++)
-    {
+    for (size_t pixelIndex = 0; pixelIndex < height * width; pixelIndex++) {
         float r = static_cast<float>(src[pixelIndex * channels + 0]) / 255.0f;
         float g = static_cast<float>(src[pixelIndex * channels + 1]) / 255.0f;
         float b = static_cast<float>(src[pixelIndex * channels + 2]) / 255.0f;
@@ -223,21 +200,19 @@ void CopyPixelsToTensor(
 // Converts an NCHW tensor buffer (batch size 1) to a pixel buffer.
 // Source: buffer of RGB planes (CHW) using float32/float16 components.
 // Target: buffer of RGB pixels (HWC) using uint8 components.
-template <typename T>
+template<typename T>
 void CopyTensorToPixels(
-    std::span<const std::byte> src, 
-    std::span<BYTE> dst,
-    uint32_t height,
-    uint32_t width,
-    uint32_t channels)
-{
-    std::span<const T> srcT(reinterpret_cast<const T*>(src.data()), src.size_bytes() / sizeof(T));
+        std::span<const std::byte> src,
+        std::span<BYTE> dst,
+        uint32_t height,
+        uint32_t width,
+        uint32_t channels) {
+    std::span<const T> srcT(reinterpret_cast<const T *>(src.data()), src.size_bytes() / sizeof(T));
 
-    for (size_t pixelIndex = 0; pixelIndex < height * width; pixelIndex++)
-    {
-        BYTE r = static_cast<BYTE>(std::max(0.0f, std::min(1.0f, (float)srcT[pixelIndex + 0 * height * width])) * 255.0f);
-        BYTE g = static_cast<BYTE>(std::max(0.0f, std::min(1.0f, (float)srcT[pixelIndex + 1 * height * width])) * 255.0f);
-        BYTE b = static_cast<BYTE>(std::max(0.0f, std::min(1.0f, (float)srcT[pixelIndex + 2 * height * width])) * 255.0f);
+    for (size_t pixelIndex = 0; pixelIndex < height * width; pixelIndex++) {
+        BYTE r = static_cast<BYTE>(std::max(0.0f, std::min(1.0f, (float) srcT[pixelIndex + 0 * height * width])) * 255.0f);
+        BYTE g = static_cast<BYTE>(std::max(0.0f, std::min(1.0f, (float) srcT[pixelIndex + 1 * height * width])) * 255.0f);
+        BYTE b = static_cast<BYTE>(std::max(0.0f, std::min(1.0f, (float) srcT[pixelIndex + 2 * height * width])) * 255.0f);
 
         dst[pixelIndex * channels + 0] = r;
         dst[pixelIndex * channels + 1] = g;
@@ -247,19 +222,17 @@ void CopyTensorToPixels(
 
 #if defined(_WIN32)
 void FillNCHWBufferFromImageFilename(
-    std::wstring_view filename,
-    std::span<std::byte> tensorBuffer,
-    uint32_t bufferHeight,
-    uint32_t bufferWidth,
-    ONNXTensorElementDataType bufferDataType,
-    ChannelOrder bufferChannelOrder)
-{
+        std::wstring_view filename,
+        std::span<std::byte> tensorBuffer,
+        uint32_t bufferHeight,
+        uint32_t bufferWidth,
+        ONNXTensorElementDataType bufferDataType,
+        ChannelOrder bufferChannelOrder) {
     using Microsoft::WRL::ComPtr;
 
     uint32_t bufferChannels = 0;
     WICPixelFormatGUID desiredImagePixelFormat = GUID_WICPixelFormatDontCare;
-    switch (bufferChannelOrder)
-    {
+    switch (bufferChannelOrder) {
         case ChannelOrder::RGB:
             bufferChannels = 3;
             desiredImagePixelFormat = GUID_WICPixelFormat24bppRGB;
@@ -275,8 +248,7 @@ void FillNCHWBufferFromImageFilename(
     }
 
     uint32_t expectedBufferSizeInBytes = bufferChannels * bufferHeight * bufferWidth;
-    switch (bufferDataType)
-    {
+    switch (bufferDataType) {
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
             expectedBufferSizeInBytes *= sizeof(float);
             break;
@@ -289,27 +261,24 @@ void FillNCHWBufferFromImageFilename(
             throw std::invalid_argument("Unsupported data type");
     }
 
-    if (tensorBuffer.size_bytes() < expectedBufferSizeInBytes)
-    {
+    if (tensorBuffer.size_bytes() < expectedBufferSizeInBytes) {
         throw std::invalid_argument("Provided buffer is too small");
     }
 
     ComPtr<IWICImagingFactory> wicFactory;
     CoCreateInstance(
-        CLSID_WICImagingFactory,
-        nullptr,
-        CLSCTX_INPROC_SERVER,
-        IID_PPV_ARGS(&wicFactory)
-    );
+            CLSID_WICImagingFactory,
+            nullptr,
+            CLSCTX_INPROC_SERVER,
+            IID_PPV_ARGS(&wicFactory));
 
     ComPtr<IWICBitmapDecoder> bitmapDecoder;
     wicFactory->CreateDecoderFromFilename(
-        filename.data(),
-        nullptr,
-        GENERIC_READ,
-        WICDecodeMetadataCacheOnLoad,
-        &bitmapDecoder
-    );
+            filename.data(),
+            nullptr,
+            GENERIC_READ,
+            WICDecodeMetadataCacheOnLoad,
+            &bitmapDecoder);
 
     ComPtr<IWICBitmapFrameDecode> bitmapFrame;
     bitmapDecoder->GetFrame(0, &bitmapFrame);
@@ -322,38 +291,33 @@ void FillNCHWBufferFromImageFilename(
     WICPixelFormatGUID imagePixelFormat;
     bitmapFrame->GetPixelFormat(&imagePixelFormat);
 
-    if (imagePixelFormat != desiredImagePixelFormat)
-    {
+    if (imagePixelFormat != desiredImagePixelFormat) {
         Microsoft::WRL::ComPtr<IWICFormatConverter> formatConverter;
         wicFactory->CreateFormatConverter(&formatConverter);
 
         formatConverter->Initialize(
-            bitmapFrame.Get(),
-            desiredImagePixelFormat,
-            WICBitmapDitherTypeNone,
-            nullptr,
-            0.0f,
-            WICBitmapPaletteTypeCustom
-        );
+                bitmapFrame.Get(),
+                desiredImagePixelFormat,
+                WICBitmapDitherTypeNone,
+                nullptr,
+                0.0f,
+                WICBitmapPaletteTypeCustom);
 
         bitmapSource = formatConverter;
     }
 
-    if (imageWidth != bufferWidth || imageHeight != bufferHeight)
-    {
-        if (bufferWidth == bufferHeight)
-        {
-            // Most ML models take a square input. In this case, crop to the 
+    if (imageWidth != bufferWidth || imageHeight != bufferHeight) {
+        if (bufferWidth == bufferHeight) {
+            // Most ML models take a square input. In this case, crop to the
             // top-left square of the image to avoid stretching.
             INT minSide = static_cast<INT>(std::min(imageWidth, imageHeight));
-            WICRect cropRect = 
-            { 
-                .X = 0, 
-                .Y = 0, 
-                .Width = minSide, 
-                .Height = minSide 
-            };
-            
+            WICRect cropRect =
+                    {
+                            .X = 0,
+                            .Y = 0,
+                            .Width = minSide,
+                            .Height = minSide};
+
             ComPtr<IWICBitmapClipper> clipper;
             wicFactory->CreateBitmapClipper(&clipper);
             clipper->Initialize(bitmapSource.Get(), &cropRect);
@@ -364,11 +328,10 @@ void FillNCHWBufferFromImageFilename(
         ComPtr<IWICBitmapScaler> scaler;
         wicFactory->CreateBitmapScaler(&scaler);
         scaler->Initialize(
-            bitmapSource.Get(),
-            bufferWidth,
-            bufferHeight,
-            WICBitmapInterpolationModeHighQualityCubic
-        );
+                bitmapSource.Get(),
+                bufferWidth,
+                bufferHeight,
+                WICBitmapInterpolationModeHighQualityCubic);
 
         bitmapSource = scaler;
     }
@@ -380,18 +343,16 @@ void FillNCHWBufferFromImageFilename(
 
     // Copy to HWC buffer with 8 bits (uint8) per channel element
     std::vector<std::byte> pixelBuffer(bufferHeight * bufferWidth * bufferChannels);
-    WICRect pixelBufferRect = { 0, 0, static_cast<INT>(bufferWidth), static_cast<INT>(bufferHeight) };
+    WICRect pixelBufferRect = {0, 0, static_cast<INT>(bufferWidth), static_cast<INT>(bufferHeight)};
     const uint32_t pixelBufferStride = bufferWidth * bufferChannels * sizeof(uint8_t);
 
     bitmapSource->CopyPixels(
-        &pixelBufferRect, 
-        pixelBufferStride, 
-        pixelBuffer.size(), 
-        reinterpret_cast<BYTE*>(pixelBuffer.data())
-    );
+            &pixelBufferRect,
+            pixelBufferStride,
+            pixelBuffer.size(),
+            reinterpret_cast<BYTE *>(pixelBuffer.data()));
 
-    switch (bufferDataType)
-    {
+    switch (bufferDataType) {
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
             CopyPixelsToTensor<float>(pixelBuffer, tensorBuffer, bufferHeight, bufferWidth, bufferChannels);
             break;
@@ -406,19 +367,17 @@ void FillNCHWBufferFromImageFilename(
 }
 
 void SaveNCHWBufferToImageFilename(
-    std::wstring_view filename,
-    std::span<const std::byte> tensorBuffer,
-    uint32_t bufferHeight,
-    uint32_t bufferWidth,
-    ONNXTensorElementDataType bufferDataType,
-    ChannelOrder bufferChannelOrder)
-{
+        std::wstring_view filename,
+        std::span<const std::byte> tensorBuffer,
+        uint32_t bufferHeight,
+        uint32_t bufferWidth,
+        ONNXTensorElementDataType bufferDataType,
+        ChannelOrder bufferChannelOrder) {
     using Microsoft::WRL::ComPtr;
 
     uint32_t bufferChannels = 0;
     WICPixelFormatGUID desiredImagePixelFormat = GUID_WICPixelFormatDontCare;
-    switch (bufferChannelOrder)
-    {
+    switch (bufferChannelOrder) {
         case ChannelOrder::RGB:
             bufferChannels = 3;
             desiredImagePixelFormat = GUID_WICPixelFormat24bppRGB;
@@ -434,8 +393,7 @@ void SaveNCHWBufferToImageFilename(
     }
 
     uint32_t outputBufferSizeInBytes = bufferChannels * bufferHeight * bufferWidth;
-    switch (bufferDataType)
-    {
+    switch (bufferDataType) {
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
             outputBufferSizeInBytes *= sizeof(float);
             break;
@@ -450,8 +408,7 @@ void SaveNCHWBufferToImageFilename(
 
     std::vector<BYTE> pixelBuffer(outputBufferSizeInBytes);
 
-    switch (bufferDataType)
-    {
+    switch (bufferDataType) {
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
             CopyTensorToPixels<float>(tensorBuffer, pixelBuffer, bufferHeight, bufferWidth, bufferChannels);
             break;
@@ -466,22 +423,20 @@ void SaveNCHWBufferToImageFilename(
 
     ComPtr<IWICImagingFactory> wicFactory;
     CoCreateInstance(
-        CLSID_WICImagingFactory,
-        nullptr,
-        CLSCTX_INPROC_SERVER,
-        IID_PPV_ARGS(&wicFactory)
-    );
+            CLSID_WICImagingFactory,
+            nullptr,
+            CLSCTX_INPROC_SERVER,
+            IID_PPV_ARGS(&wicFactory));
 
     ComPtr<IWICBitmap> bitmap;
     wicFactory->CreateBitmapFromMemory(
-        bufferWidth,
-        bufferHeight,
-        desiredImagePixelFormat,
-        bufferWidth * bufferChannels,
-        pixelBuffer.size(),
-        pixelBuffer.data(),
-        &bitmap
-    );
+            bufferWidth,
+            bufferHeight,
+            desiredImagePixelFormat,
+            bufferWidth * bufferChannels,
+            pixelBuffer.size(),
+            pixelBuffer.data(),
+            &bitmap);
 
     ComPtr<IWICStream> stream;
     wicFactory->CreateStream(&stream);

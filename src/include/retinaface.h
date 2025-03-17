@@ -1,7 +1,7 @@
 #ifndef FACER_H
 #define FACER_H
-#include <cmath>
 #include "include/model.h"
+#include <cmath>
 
 struct FaceObject {
     cv::Rect_<float> rect;
