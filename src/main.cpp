@@ -16,7 +16,7 @@
 #if _WIN32
 static wchar_t *optarg = NULL;
 static int optind = 1;
-static wchar_t getopt(int argc, wchar_t *const argv[], const wchar_t *optstring) {
+static wchar_t parsecmd(int argc, wchar_t *const argv[], const wchar_t *optstring) {
     optarg = NULL;
     if (optind >= argc)
         return 0;
@@ -44,33 +44,29 @@ static wchar_t getopt(int argc, wchar_t *const argv[], const wchar_t *optstring)
 #endif
 
 static void print_usage() {
-    const char *str = R"(
-CXVUSER AI MegaPixel XL Super-Black edition Upscale solution )" VER R"(, Welcome...
-This project uses (onnx,ncnn inference) with Vulkan and DirectML compute...
-
-Usage: this_binary [options]...
-
- -i <img> path to image
- -s <digit> model scale factor (default=autodetect)
- -j <digit> custom output scale factor
- -t <digit> tile size (default=auto)
- -f restore faces (default=codeformer)
- -m <string> esrgan model name (default=./models/ESRGAN/4xNomos8kSC)
- -g <string> gfpgan(or same as gfp) model path (default=./models/face_restore/codeformer_0_1_0.onnx)
- -x <digit> face detection threshold (default=0,5) (0,3..0,7 recommended)
- -c use CodeFormer face restore model (ncnn)
- -d swith face restore infer to onnx
- -w <digit> CodeFormer Fidelity (Only onnx) (default=0,7)
- -u Face Upsample (after face restore)
- -z <string> FaceUpsample model (ESRGAN)
- -p Use face parsing for accurate face masking (default=false)
- -o <string> override image input path
- -l <string> Face detector model (default=y7) (y7,y5,rt(retinaface R50))
- -h Colorize grayscale photo with Siggraph17
- -n no upsample
- -a wait
- -v verbose
-)";
+    const char *str = "CXVUSER AI MegaPixel XL Super-Black Edition Upscale Solution " VER ", Welcome...\n"
+                      "This project uses (onnx, ncnn inference) with Vulkan and DirectML compute...\n\n"
+                      "Usage: this_binary [options]...\n\n"
+                      " -i <img>      Path to input image\n"
+                      " -s <digit>    Model scale factor (default=autodetect)\n"
+                      " -j <digit>    Custom output scale factor\n"
+                      " -t <digit>    Tile size (default=auto)\n"
+                      " -f            Restore faces (default=CodeFormer)\n"
+                      " -m <string>   ESRGAN model name (default=./models/ESRGAN/4xNomos8kSC)\n"
+                      " -g <string>   GFPGAN model path (default=./models/face_restore/codeformer_0_1_0.onnx)\n"
+                      " -x <digit>    Face detection threshold (default=0.5, recommended range: 0.3-0.7)\n"
+                      " -c            Use CodeFormer face restore model (ncnn)\n"
+                      " -d            Switch face restore inference to ONNX (default=enabled)\n"
+                      " -w <digit>    CodeFormer Fidelity (Only ONNX, default=0.7)\n"
+                      " -u            Face upsample (after face restore)\n"
+                      " -z <string>   FaceUpsample model (ESRGAN)\n"
+                      " -p            Use face parsing for accurate face masking (default=false)\n"
+                      " -o <string>   Override image input path\n"
+                      " -l <string>   Face detector model (default=y7, options: y7, y5, rt (RetinaFace R50))\n"
+                      " -h            Colorize grayscale photo with DeOldify Artistic\n"
+                      " -n            No upsample\n"
+                      " -a            Wait (pause execution)\n"
+                      " -v            Verbose mode (detailed logging)";
 
     fprintf(stderr, str);
 };
@@ -110,6 +106,8 @@ int main(int argc, char **argv)
     char esr_modela[_MAX_PATH] = "./models/ESRGAN/4xNomos8kSC";
     std::wstring face_restore_model_onnx = L"./models/face_restore/codeformer_0_1_0.onnx";
     char gfp_modela[_MAX_PATH] = "./models/face_restore/codeformer_0_1_0.onnx";
+    char color_modela[_MAX_PATH] = "./models/COLOR/deoldify_artistic";
+    std::wstring color_model = L"./models/COLOR/deoldify_artistic";
     std::wstring out_path;
     char out_patha[_MAX_PATH];
     std::wstring fc_up_m;
@@ -126,7 +124,7 @@ int main(int argc, char **argv)
     bool verbose = false;
     bool wait = false;
     bool use_codeformer = false;
-    bool use_infer_onnx = false;
+    bool use_infer_onnx = true;
     float codeformer_fidelity = 0.5;
     bool fc_up_ = false;
     bool useParse = false;
@@ -134,10 +132,12 @@ int main(int argc, char **argv)
     float prob_face_thd = 0.5f;
     float nms_face_thd = 0.65f;
 
-#if _WIN32
+#ifdef _WIN32
     setlocale(LC_ALL, "");
+#endif
+
     wchar_t opt;
-    while ((opt = getopt(argc, argv, L"i:s:t:j:f:m:g:v:n:c:x:w:d:u:z:o:p:a:l:h")) != (wchar_t) 0) {
+    while ((opt = parsecmd(argc, argv, L"i:s:t:j:f:m:g:v:n:c:x:w:d:u:z:o:p:a:l:h")) != (wchar_t) 0) {
         switch (opt) {
             case L'i': {
                 if (optarg) {
@@ -178,7 +178,7 @@ int main(int argc, char **argv)
                 use_codeformer = true;
             } break;
             case L'd': {
-                use_infer_onnx = true;
+                use_infer_onnx = false;
             } break;
             case L'w': {
                 if (optarg)
@@ -228,7 +228,6 @@ int main(int argc, char **argv)
             } break;
         }
     }
-#endif
 
     if (imagepath.empty() || (false == upsample && false == restore_face)) {
         print_usage();
@@ -240,17 +239,51 @@ int main(int argc, char **argv)
     unsigned char *pixeldata = 0;
     int w{}, h{}, c{};
 
-    int haveOpenCL{};
-    int useOpenCL{};
-    // if (haveOpenCL = cv::ocl::haveOpenCL())
-    //    cv::ocl::setUseOpenCL(true);
-    //useOpenCL = cv::ocl::useOpenCL();
-    cv::setNumThreads(cv::getNumberOfCPUs());
-
     cv::Mat image = cv::imread(imagepatha, cv::ImreadModes::IMREAD_COLOR_BGR);
 
     PipelineConfig_t pipeline_config_t;
     PipeLine pipe;
+
+    pipeline_config_t.model_path = L"./models/";
+    if (true == use_infer_onnx)
+        pipeline_config_t.onnx = true;
+
+    if (true == upsample) {
+        pipeline_config_t.bg_upsample = upsample;
+        pipeline_config_t.esr_model = esr_model;
+
+        if (tilesize)
+            pipeline_config_t.tilesize = tilesize;
+        pipeline_config_t.model_scale = (model_scale == 0) ? pipe.getModelScale(esr_model) : model_scale;
+    }
+
+    if (custom_scale)
+        pipeline_config_t.custom_scale = custom_scale;
+
+    if (true == restore_face) {
+        pipeline_config_t.face_upsample = fc_up_;
+        pipeline_config_t.prob_thr = prob_face_thd;
+        pipeline_config_t.face_restore = restore_face;
+        pipeline_config_t.face_det_model = fc_det;
+        pipeline_config_t.useParse = useParse;
+        pipeline_config_t.w = codeformer_fidelity;
+        pipeline_config_t.fc_up_model = fc_up_m;
+        if (false == use_infer_onnx) {
+            if (true == use_codeformer)
+                pipeline_config_t.codeformer = true;
+            else
+                pipeline_config_t.codeformer = false;
+        } else {
+            pipeline_config_t.face_model = face_restore_model_onnx;
+        }
+    }
+
+    if (true == color) {
+        pipeline_config_t.Colorize = color;
+        pipeline_config_t.colorize_m = color_model;
+    }
+
+    pipe.CreatePipeLine(pipeline_config_t);
 
     if (true == verbose) {
         fprintf(stderr, "Input image dimensions w: %d, h: %d, c: %d...\n", image.cols, image.rows, image.channels());
@@ -275,43 +308,8 @@ int main(int argc, char **argv)
                         " OpenCV cpu core uses: %d\n",
                 tilesize ? tilesize : pipe.getEffectiveTilesize(), use_infer_onnx ? 0 : 1, use_infer_onnx, restore_face, (model_scale == 0) ? pipe.getModelScale(esr_model) : model_scale,
                 upsample, use_codeformer, gfp_modela, esr_modela, ncnn::get_gpu_device(ncnn::get_default_gpu_index())->get_heap_budget(),
-                color, custom_scale, fc_up_, codeformer_fidelity, prob_face_thd, fc_deta, haveOpenCL, useOpenCL, cv::getNumThreads());
+                color, custom_scale, fc_up_, codeformer_fidelity, prob_face_thd, fc_deta, cv::ocl::haveOpenCL(), cv::ocl::useOpenCL(), cv::getNumThreads());
     }
-
-    pipeline_config_t.model_path = L"./models/";
-    if (use_infer_onnx)
-        pipeline_config_t.onnx = true;
-
-    pipeline_config_t.bg_upsample = upsample;
-    pipeline_config_t.esr_model = esr_model;
-
-    pipeline_config_t.face_upsample = fc_up_;
-    pipeline_config_t.prob_thr = prob_face_thd;
-
-    pipeline_config_t.custom_scale = custom_scale;
-    pipeline_config_t.model_scale = (model_scale == 0) ? pipe.getModelScale(esr_model) : model_scale;
-
-    pipeline_config_t.w = codeformer_fidelity;
-    pipeline_config_t.fc_up_model = fc_up_m;
-
-    pipeline_config_t.face_restore = restore_face;
-
-    if (restore_face) {
-        if (!use_infer_onnx) {
-            if (use_codeformer)
-                pipeline_config_t.codeformer = true;
-            else
-                pipeline_config_t.codeformer = false;
-        } else {
-            pipeline_config_t.face_model = face_restore_model_onnx;
-        }
-    }
-
-    pipeline_config_t.face_det_model = fc_det;
-    pipeline_config_t.useParse = useParse;
-    pipeline_config_t.colorize = color;
-
-    pipe.CreatePipeLine(pipeline_config_t);
 
     cv::Mat result = pipe.Apply(image);
 
@@ -350,7 +348,6 @@ int main(int argc, char **argv)
     }
     //------------------------------------- Save result image -------------------------------------
 
-    ncnn::destroy_gpu_instance();
 
     fprintf(stderr, "Finish enjoy...\n");
     if (wait)
