@@ -276,10 +276,31 @@ int FaceR::Load(const std::wstring &model_path) {
 }
 
 int FaceR::Process(const cv::Mat &bgr, void *result) {
+    const int target_size = 640;
+
     int img_w = bgr.cols;
     int img_h = bgr.rows;
 
-    ncnn::Mat in = ncnn::Mat::from_pixels(bgr.data, ncnn::Mat::PIXEL_BGR2RGB, img_w, img_h);
+    int w = img_w;
+    int h = img_h;
+    float scale = 1.f;
+    if (w > h) {
+        scale = (float) target_size / w;
+        w = target_size;
+        h = h * scale;
+    } else {
+        scale = (float) target_size / h;
+        h = target_size;
+        w = w * scale;
+    }
+    //scale = float(target_size) / std::min(h, w);
+
+    ncnn::Mat in = ncnn::Mat::from_pixels_resize(bgr.data, ncnn::Mat::PIXEL_BGR2RGB, img_w, img_h, w, h);
+
+    //int wpad = target_size - w;//(w + 31) / 32 * 32 - w;
+    //int hpad = target_size - h;//(h + 31) / 32 * 32 - h;
+    //ncnn::Mat in_pad;
+    //ncnn::copy_make_border(in, in_pad, hpad, hpad - hpad, wpad, wpad - wpad, ncnn::BORDER_CONSTANT, 0.f);
 
     ncnn::Extractor ex = net_.create_extractor();
 
@@ -370,17 +391,21 @@ int FaceR::Process(const cv::Mat &bgr, void *result) {
         res->object.push_back(o);
 
         // clip to image size
-        float x0 = fc.rect.x;
-        float y0 = fc.rect.y;
-        float x1 = x0 + fc.rect.width;
-        float y1 = y0 + fc.rect.height;
+        float x0 = fc.rect.x / scale;
+        float y0 = fc.rect.y / scale;
+        float x1 = x0 + fc.rect.width / scale;
+        float y1 = y0 + fc.rect.height / scale;
 
         x0 = std::max(std::min(x0, (float) img_w - 1), 0.f);
         y0 = std::max(std::min(y0, (float) img_h - 1), 0.f);
         x1 = std::max(std::min(x1, (float) img_w - 1), 0.f);
         y1 = std::max(std::min(y1, (float) img_h - 1), 0.f);
-        for (size_t j = 0; j < 5; j++)
-            res->object[i].pts.push_back(fc.landmark[j]);
+        for (size_t j = 0; j < 5; j++) {
+            //    -(wpad / 2) / scale
+            float ptx = fc.landmark[j].x / scale;
+            float pty = fc.landmark[j].y / scale;
+            res->object[i].pts.push_back(cv::Point2f(ptx, pty));
+        }
 
         res->object[i].rect.x = x0;
         res->object[i].rect.y = y0;

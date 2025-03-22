@@ -11,9 +11,8 @@
 
 #include <opencv2\core\ocl.hpp>
 
-#define VER "1.03"
+#define VER "2.00"
 
-#if _WIN32
 static wchar_t *optarg = NULL;
 static int optind = 1;
 static wchar_t parsecmd(int argc, wchar_t *const argv[], const wchar_t *optstring) {
@@ -41,7 +40,6 @@ static wchar_t parsecmd(int argc, wchar_t *const argv[], const wchar_t *optstrin
 
     return -1;
 };
-#endif
 
 static void print_usage() {
     const char *str = "CXVUSER AI MegaPixel XL Super-Black Edition Upscale Solution " VER ", Welcome...\n"
