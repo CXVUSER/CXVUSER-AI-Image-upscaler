@@ -418,7 +418,7 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
     return 0;
 };
 
-cv::Mat preprocessImage(const cv::Mat &inputImage) {
+cv::Mat image2tensor(const cv::Mat &inputImage) {
 
     cv::Mat blob = cv::dnn::blobFromImage(inputImage, 1.0 / 255.0, cv::Size(), cv::Scalar(), true, false, CV_32F);
     blob = blob * 2.0 - 1.0;
@@ -426,7 +426,7 @@ cv::Mat preprocessImage(const cv::Mat &inputImage) {
     return blob;
 };
 
-cv::Mat postProcessImage(const float *outputData, const std::vector<int64_t> &outputShape) {
+cv::Mat tensor2image(const float *outputData, const std::vector<int64_t> &outputShape) {
     int N = static_cast<int>(outputShape[0]);
     int C = static_cast<int>(outputShape[1]);
     int H = static_cast<int>(outputShape[2]);
@@ -466,7 +466,7 @@ cv::Mat PipeLine::inferFaceModel(
     auto outputTensorInfo = outputTypeInfo.GetTensorTypeAndShapeInfo();
     auto outputShape = outputTensorInfo.GetShape();
 
-    cv::Mat imgp = preprocessImage(input_img);
+    cv::Mat imgp = image2tensor(input_img);
     float inputTensorSize = 1;
     for (auto dim: inputShape) {
         inputTensorSize *= static_cast<float>(dim);
@@ -522,7 +522,7 @@ cv::Mat PipeLine::inferFaceModel(
     fprintf(stderr, "Processing onnx model finished...\n");
     bindings.SynchronizeOutputs();
 
-    return postProcessImage((float *) bindings.GetOutputValues()[0].GetTensorRawData(), outputShape);
+    return tensor2image((float *) bindings.GetOutputValues()[0].GetTensorRawData(), outputShape);
 };
 
 cv::Mat PipeLine::Apply(const cv::Mat &input_img) {
