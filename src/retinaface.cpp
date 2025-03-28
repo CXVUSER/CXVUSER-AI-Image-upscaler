@@ -213,7 +213,7 @@ static void generate_proposals(const ncnn::Mat &anchors, int feat_stride, const 
     }
 };
 
-FaceR::FaceR(bool gpu) {
+FaceR::FaceR(bool gpu, bool mnet) {
     face_template.push_back(cv::Point2f(192.98138, 239.94708));
     face_template.push_back(cv::Point2f(318.90277, 240.1936));
     face_template.push_back(cv::Point2f(256.63416, 314.01935));
@@ -225,6 +225,7 @@ FaceR::FaceR(bool gpu) {
         net_.opt.use_vulkan_compute = false;
 
     this->gpu = gpu;
+    this->mnet = mnet;
 };
 
 FaceR::~FaceR() {
@@ -238,16 +239,16 @@ void FaceR::setThreshold(float prob_threshold_, float nms_threshold_) {
 };
 
 int FaceR::Load(const std::wstring &model_path) {
-    std::wstring model_param = model_path + L"/face_det/retinaface-R50.param";
-    std::wstring model_bin = model_path + L"/face_det/retinaface-R50.bin";
+    std::wstring model_param;
+    std::wstring model_bin;
 
-    // model is converted from
-    // https://github.com/deepinsight/insightface/tree/master/RetinaFace#retinaface-pretrained-models
-    // https://github.com/deepinsight/insightface/issues/669
-    // the ncnn model https://github.com/nihui/ncnn-assets/tree/master/models
-    // mobilenet (small fast)
-    //     retinaface.load_param("mnet.25-opt.param");
-    //     retinaface.load_model("mnet.25-opt.bin");
+    if (true == mnet) {
+        model_param = model_path + L"/face_det/mnet.25-opt.param";
+        model_bin = model_path + L"/face_det/mnet.25-opt.bin";
+    } else {
+        model_param = model_path + L"/face_det/retinaface-R50.param";
+        model_bin = model_path + L"/face_det/retinaface-R50.bin";
+    }
 
     FILE *f = _wfopen(model_param.c_str(), L"rb");
     if (f) {

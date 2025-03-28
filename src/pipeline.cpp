@@ -353,6 +353,8 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
             face_detector = new Face_yolov5_bl();
         if (pipe.face_det_model.find(L"rt", 0) != std::string::npos)
             face_detector = new FaceR(pipe.gpu);
+        if (pipe.face_det_model.find(L"mnet", 0) != std::string::npos)
+            face_detector = new FaceR(pipe.gpu, true);
 
         int ret = face_detector->Load(pipe.model_path);
         if (ret < 0) {
@@ -746,6 +748,8 @@ void PipeLine::changeSettings(int type, PipelineConfig_t &cfg) {
                 face_detector = new Face_yolov5_bl();
             if (pipe.face_det_model.find(L"rt", 0) != std::string::npos)
                 face_detector = new FaceR(pipe.gpu);
+            if (pipe.face_det_model.find(L"mnet", 0) != std::string::npos)
+                face_detector = new FaceR(pipe.gpu, true);
 
             int ret = face_detector->Load(pipe.model_path);
 

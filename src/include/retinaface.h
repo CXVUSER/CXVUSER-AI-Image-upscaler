@@ -11,7 +11,7 @@ struct FaceObject {
 
 class FaceR : public FaceDetModel {
 public:
-    FaceR(bool gpu = true);
+    FaceR(bool gpu = true, bool mnet = false);
     ~FaceR();
     int Load(const std::wstring &model_path) override;
     void setThreshold(float prob_threshold_, float nms_threshold_);
@@ -33,6 +33,7 @@ private:
     std::vector<cv::Point2f> face_template;
     ncnn::Net net_;
     bool gpu;
+    bool mnet;
     std::vector<int> input_indexes_;
     std::vector<int> output_indexes_;
 };
