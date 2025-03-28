@@ -1,44 +1,48 @@
-# Upscayl-gfpgan-codeformer-realesr-ncnn-directml-vulkan 🚀
+# CXVUSER-AI-Image-upscaler 🚀
 
-Ncnn with Vulkan implementation of **GFPGAN aims at developing Practical Algorithms for Real-world Face Restoration**
+My Application for Restoration (low-res, old photo) and colorization images with AI
 
-This repository contains the code and pre-trained models for a real-world face restoration algorithm based on the [GFPGAN](https://github.com/TencentARC/GFPGAN) method and optimized for mobile devices using the [NCNN](https://github.com/Tencent/ncnn) framework with a Vulkan backend.
+This project uses (onnx, ncnn inference) with Vulkan and DirectML compute GPU acceleration...
 
-The goal of this project is to develop practical algorithms that can restore the appearance of damaged or low-quality face images, such as those obtained from security cameras, old photographs, or social media profiles. The proposed approach combines the power of deep learning with the speed and efficiency of hardware acceleration, making it suitable for real-time applications on smartphones, drones, or robots.
+Platforms:
+1. Windows (current)
+2. Linux (at future)
+3. MacOS (at future)
 
-## :construction: Model support :construction:
+## :construction: AI Models support :construction:
 
-1. GFPGANCleanv1-NoCE-C2(NCNN)
-2. GFPGAN 1.2,1.3,1.4(ONNX)
+1. GFPGANCleanv1-NoCE-C2 (NCNN)
+2. GFPGAN 1.2,1.3,1.4 (ONNX)
 3. ncnn ESRGAN models
 4. CodeFormer 0.1.0
 5. RestoreFormer, RestoreFormer-plus-plus
 6. GPEN
-7. Siggraph17 for colorize photo
+7. Siggraph17, DDColor, Deoldify for colorize photo
 
 ### Usage tips:
 ```
 Usage: this_binary [options]...
 
- -i <img> path to image
- -s <digit> model scale factor (default=autodetect)
- -j <digit> custom output scale factor
- -t <digit> tile size (default=auto)
- -f restore faces (default=codeformer)
- -m <string> esrgan model name (default=./models/ESRGAN/4xNomos8kSC)
- -g <string> gfpgan(or same as gfp) model path (default=./models/face_restore/codeformer_0_1_0.onnx)
- -x <digit> face detection threshold (default=0,5) (0,3..0,7 recommended)
- -c use CodeFormer face restore model (ncnn)
- -d swith face restore infer to onnx
- -w <digit> CodeFormer Fidelity (Only onnx) (default=0,7)
- -u Face Upsample (after face restore)
- -z <string> FaceUpsample model (ESRGAN)
- -p Use face parsing for accurate face masking (default=false)
- -o <string> override image output path
- -l <string> Face detector model (default=y7) (y7,y5,rt(retinaface R50))
- -h Colorize grayscale photo with Siggraph17 -n no upsample
- -a wait
- -v verbose
+ -i <img>      Path to input image
+ -s <digit>    Model scale factor (default=autodetect)
+ -j <digit>    Custom output scale factor
+ -t <digit>    Tile size (default=auto)
+ -f            Restore faces (default=CodeFormer)
+ -m <string>   ESRGAN model name (default=./models/ESRGAN/4xNomos8kSC)
+ -g <string>   GFPGAN model path (default=./models/face_restore/codeformer_0_1_0.onnx)
+ -x <digit>    Face detection threshold (default=0.5, recommended range: 0.3-0.7)
+ -c            Use CodeFormer face restore model (ncnn)
+ -d            Switch face restore inference to ONNX (default=enabled)
+ -w <digit>    CodeFormer Fidelity (Only ONNX, default=0.7)
+ -u            Face upsample (after face restore)
+ -z <string>   FaceUpsample model (ESRGAN)
+ -p            Use face parsing for accurate face masking (default=false)
+ -o <string>   Override image input path
+ -l <string>   Face detector model (default=y7, options: y7, y5, (RetinaFace: rt, mnet))
+ -h            Colorize grayscale photo with DeOldify Artistic
+ -n            No upsample
+ -a            Wait (pause execution)
+ -v            Verbose mode (detailed logging)
 ```
 
 ### Sample:
@@ -53,14 +57,14 @@ gfpgan-ncnn-vulkan.exe -i .\avatar6827912_4.jpeg -v -m ./models/4xNomos8kSC -x 0
 Make sure submodules are initialized and updated
 
 ```console
-git clone https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml.git
+git clone https://github.com/CXVUSER/CXVUSER-AI-Image-upscaler.git
 git submodule update --init --recursive
 ```
 
 ## Clone project with Submodules
 
 ```sh
-git clone --recursive https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml.git
+git clone --recursive https://github.com/CXVUSER/CXVUSER-AI-Image-upscaler.git
 ```
 
 ## Project Prerequisites ⚙️
@@ -101,6 +105,3 @@ cmake build ..
 11. <https://github.com/upscayl/upscayl-ncnn>
 12. <https://github.com/sczhou/CodeFormer>
 13. <https://github.com/microsoft/onnxruntime>
-
-## Download Model files (CODEFORMER-GFPGAN-ESRGAN-ncnn-onnx model files)
-https://github.com/CXVUSER/Upscayl-gpfgan-realesr-ncnn-directml/releases/download/1.0.3/models_1_03.7z
