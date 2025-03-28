@@ -613,7 +613,7 @@ cv::Mat PipeLine::Apply(const cv::Mat &input_img) {
         fwprintf(stderr, L"Detected %d faces\n", pipe_result.face_count);
 
         for (int i = 0; i != pipe_result.face_count; ++i) {
-            fwprintf(stderr, L"%s process %d face...\n", getfilew((wchar_t *) pipe.face_model.c_str()), i + 1);
+            fwprintf(stderr, L"Processing %d face...\n", i + 1);
             crops.push_back(pipe_result.object[i].trans_img.clone());
             if (pipe.onnx) {
                 cv::Mat restored_face = inferFaceModel(

@@ -41,11 +41,6 @@ enum class ChannelOrder
     BGR,
 };
 
-bool pathisfolderw(wchar_t *c);
-bool pathisfoldera(char *c);
-wchar_t *getfilew(wchar_t *t);
-char *getfilea(char *t);
-
 #if defined(_WIN32)
 std::tuple<Microsoft::WRL::ComPtr<IDMLDevice>, Microsoft::WRL::ComPtr<ID3D12CommandQueue>> CreateDmlDeviceAndCommandQueue(
     std::string_view adapterNameFilter = ""

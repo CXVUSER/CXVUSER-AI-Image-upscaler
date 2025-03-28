@@ -28,7 +28,7 @@
 static inline float intersection_area(const FaceObject &a, const FaceObject &b) {
     cv::Rect_<float> inter = a.rect & b.rect;
     return inter.area();
-}
+};
 
 static void qsort_descent_inplace(std::vector<FaceObject> &faceobjects, int left, int right) {
     int i = left;
@@ -62,14 +62,14 @@ static void qsort_descent_inplace(std::vector<FaceObject> &faceobjects, int left
             if (i < right) qsort_descent_inplace(faceobjects, i, right);
         }
     }
-}
+};
 
 static void qsort_descent_inplace(std::vector<FaceObject> &faceobjects) {
     if (faceobjects.empty())
         return;
 
     qsort_descent_inplace(faceobjects, 0, faceobjects.size() - 1);
-}
+};
 
 static void nms_sorted_bboxes(const std::vector<FaceObject> &faceobjects, std::vector<int> &picked, float nms_threshold) {
     picked.clear();
@@ -99,7 +99,7 @@ static void nms_sorted_bboxes(const std::vector<FaceObject> &faceobjects, std::v
         if (keep)
             picked.push_back(i);
     }
-}
+};
 
 // copy from src/layer/proposal.cpp
 static ncnn::Mat generate_anchors(int base_size, const ncnn::Mat &ratios, const ncnn::Mat &scales) {
@@ -134,7 +134,7 @@ static ncnn::Mat generate_anchors(int base_size, const ncnn::Mat &ratios, const 
     }
 
     return anchors;
-}
+};
 
 static void generate_proposals(const ncnn::Mat &anchors, int feat_stride, const ncnn::Mat &score_blob, const ncnn::Mat &bbox_blob, const ncnn::Mat &landmark_blob, float prob_threshold, std::vector<FaceObject> &faceobjects) {
     int w = score_blob.w;
@@ -211,7 +211,7 @@ static void generate_proposals(const ncnn::Mat &anchors, int feat_stride, const 
             anchor_y += feat_stride;
         }
     }
-}
+};
 
 FaceR::FaceR(bool gpu) {
     face_template.push_back(cv::Point2f(192.98138, 239.94708));
@@ -225,16 +225,17 @@ FaceR::FaceR(bool gpu) {
         net_.opt.use_vulkan_compute = false;
 
     this->gpu = gpu;
-}
+};
+
 FaceR::~FaceR() {
     net_.clear();
-}
+};
 
 void FaceR::setThreshold(float prob_threshold_, float nms_threshold_) {
     this->prob_threshold = prob_threshold_;
     this->nms_threshold = nms_threshold_;
     return;
-}
+};
 
 int FaceR::Load(const std::wstring &model_path) {
     std::wstring model_param = model_path + L"/face_det/retinaface-R50.param";
@@ -273,7 +274,7 @@ int FaceR::Load(const std::wstring &model_path) {
         fwprintf(stderr, L"open model file %s failed\n", model_bin.c_str());
         return -1;
     }
-}
+};
 
 int FaceR::Process(const cv::Mat &bgr, void *result) {
     const int target_size = 640;
@@ -417,7 +418,7 @@ int FaceR::Process(const cv::Mat &bgr, void *result) {
         AlignFace(bgr, res->object[i]);
 
     return 0;
-}
+};
 
 void FaceR::AlignFace(const cv::Mat &img, Object_t &objects) {
 
@@ -432,7 +433,7 @@ void FaceR::AlignFace(const cv::Mat &img, Object_t &objects) {
 
     affine_matrix_inv.copyTo(objects.trans_inv);
     cropped_face.copyTo(objects.trans_img);
-}
+};
 
 void FaceR::draw_faceobjects(const cv::Mat &bgr, const std::vector<FaceObject> &faceobjects) {
     cv::Mat image = bgr.clone();
@@ -473,7 +474,7 @@ void FaceR::draw_faceobjects(const cv::Mat &bgr, const std::vector<FaceObject> &
 
     cv::imshow("image", image);
     cv::waitKey(0);
-}
+};
 
 void FaceR::Run(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor){};
 void FaceR::PreProcess(const void *input_data, std::vector<Tensor_t> &input_tensor){};

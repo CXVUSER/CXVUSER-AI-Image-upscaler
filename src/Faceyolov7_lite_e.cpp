@@ -4,7 +4,7 @@
 static inline float intersection_area(const Object_t &a, const Object_t &b) {
     cv::Rect_<float> inter = a.rect & b.rect;
     return inter.area();
-}
+};
 
 static void qsort_descent_inplace(std::vector<Object_t> &faceobjects, int left, int right) {
     int i = left;
@@ -38,14 +38,14 @@ static void qsort_descent_inplace(std::vector<Object_t> &faceobjects, int left, 
             if (i < right) qsort_descent_inplace(faceobjects, i, right);
         }
     }
-}
+};
 
 static void qsort_descent_inplace(std::vector<Object_t> &faceobjects) {
     if (faceobjects.empty())
         return;
 
     qsort_descent_inplace(faceobjects, 0, faceobjects.size() - 1);
-}
+};
 
 static void nms_sorted_bboxes(const std::vector<Object_t> &faceobjects, std::vector<int> &picked, float nms_threshold) {
     picked.clear();
@@ -75,11 +75,11 @@ static void nms_sorted_bboxes(const std::vector<Object_t> &faceobjects, std::vec
         if (keep)
             picked.push_back(i);
     }
-}
+};
 
 static inline float sigmoid(float x) {
     return static_cast<float>(1.f / (1.f + exp(-x)));
-}
+};
 
 static void generate_proposals(const ncnn::Mat &anchors, int stride, int pad_h, int pad_w, const ncnn::Mat &feat_blob, float prob_threshold, std::vector<Object_t> &objects) {
     const int num_grid = feat_blob.h;
@@ -153,13 +153,13 @@ static void generate_proposals(const ncnn::Mat &anchors, int stride, int pad_h, 
             }
         }
     }
-}
+};
 
 void Faceyolov7_lite_e::setThreshold(float prob_threshold_, float nms_threshold_) {
     this->prob_threshold = prob_threshold_;
     this->nms_threshold = nms_threshold_;
     return;
-}
+};
 
 Faceyolov7_lite_e::Faceyolov7_lite_e() {
     net_.opt.num_threads = 4;
@@ -169,10 +169,11 @@ Faceyolov7_lite_e::Faceyolov7_lite_e() {
     face_template.push_back(cv::Point2f(256.63416, 314.01935));
     face_template.push_back(cv::Point2f(201.26117, 371.41043));
     face_template.push_back(cv::Point2f(313.08905, 371.15118));
-}
+};
+
 Faceyolov7_lite_e::~Faceyolov7_lite_e() {
     net_.clear();
-}
+};
 
 int Faceyolov7_lite_e::Load(const std::wstring &model_path) {
     std::wstring net_param_path = model_path + L"/face_det/yolov7-lite-e.param";
@@ -221,7 +222,7 @@ int Faceyolov7_lite_e::Load(const std::wstring &model_path) {
     }
 
     return 0;
-}
+};
 
 void Faceyolov7_lite_e::PreProcess(const void *input_data, std::vector<Tensor_t> &input_tensor) {
     const int target_size = 640;
@@ -264,7 +265,7 @@ void Faceyolov7_lite_e::PreProcess(const void *input_data, std::vector<Tensor_t>
     tensor_t.in_w = in_pad.w;
     tensor_t.scale = scale;
     input_tensor.push_back(tensor_t);
-}
+};
 
 void Faceyolov7_lite_e::Run(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor) {
     ncnn::Extractor net_ex = net_.create_extractor();
@@ -278,7 +279,7 @@ void Faceyolov7_lite_e::Run(const std::vector<Tensor_t> &input_tensor, std::vect
         net_ex.extract(output_indexes_[i], out);
         output_tensor.push_back(Tensor_t(out));
     }
-}
+};
 
 void Faceyolov7_lite_e::AlignFace(const cv::Mat &img, Object_t &object) {
     cv::Mat affine_matrix = cv::estimateAffinePartial2D(object.pts, face_template, cv::noArray(), cv::LMEDS);
@@ -292,7 +293,7 @@ void Faceyolov7_lite_e::AlignFace(const cv::Mat &img, Object_t &object) {
 
     affine_matrix_inv.copyTo(object.trans_inv);
     cropped_face.copyTo(object.trans_img);
-}
+};
 
 void Faceyolov7_lite_e::PostProcess(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor, void *result) {
     std::vector<Object_t> proposals;
@@ -382,7 +383,7 @@ void Faceyolov7_lite_e::PostProcess(const std::vector<Tensor_t> &input_tensor, s
         res->object[i].rect.width = x1 - x0;
         res->object[i].rect.height = y1 - y0;
     }
-}
+};
 
 int Faceyolov7_lite_e::Process(const cv::Mat &input_img, void *result) {
     std::vector<Tensor_t> input_tensor;
@@ -400,7 +401,7 @@ int Faceyolov7_lite_e::Process(const cv::Mat &input_img, void *result) {
 
     //this->draw_objects(input_img, ((PipeResult_t *) result)->object);
     return 0;
-}
+};
 
 void Faceyolov7_lite_e::draw_objects(const cv::Mat &bgr, const std::vector<Object_t> &objects) {
     cv::Mat image = bgr.clone();
@@ -443,4 +444,4 @@ void Faceyolov7_lite_e::draw_objects(const cv::Mat &bgr, const std::vector<Objec
         cv::imshow("image", image);
         cv::waitKey();
     }
-}
+};

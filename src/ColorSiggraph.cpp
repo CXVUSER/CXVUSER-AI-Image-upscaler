@@ -46,14 +46,14 @@ DEFINE_LAYER_CREATOR(Sig17Slice)
 
 ColorSiggraph::ColorSiggraph(bool gpu) {
     this->gpu = gpu;
-}
+};
 
 ColorSiggraph::~ColorSiggraph() {
     if (env)
         delete env;
     if (ortSession)
         delete ortSession;
-}
+};
 
 int ColorSiggraph::load(Ort::SessionOptions &sessOpt, std::wstring &model) {
     if (model.find(L"siggraph17", 0) != std::string::npos) {
@@ -111,7 +111,7 @@ int ColorSiggraph::load(Ort::SessionOptions &sessOpt, std::wstring &model) {
     }
 
     return 0;
-}
+};
 
 void ColorSiggraph::process_Siggraph17(const cv::Mat &inimage, cv::Mat &outimage) const {
     //fixed input size for the pretrained network
@@ -169,7 +169,7 @@ void ColorSiggraph::process_Siggraph17(const cv::Mat &inimage, cv::Mat &outimage
     //normalize values to 0->255
     lab.convertTo(lab, CV_8UC3, 255);
     lab.copyTo(outimage);
-}
+};
 
 void ColorSiggraph::process_deoldify(const cv::Mat &inimage, cv::Mat &outimage) const {
 
@@ -280,7 +280,7 @@ void ColorSiggraph::process_deoldify(const cv::Mat &inimage, cv::Mat &outimage) 
 
     cv::cvtColor(result, result, cv::COLOR_Lab2BGR);
     result.copyTo(outimage);
-}
+};
 
 void ColorSiggraph::process_DDColor(const cv::Mat &inimage, cv::Mat &outimage) const {
     // Загрузка изображения
@@ -366,7 +366,7 @@ void ColorSiggraph::process_DDColor(const cv::Mat &inimage, cv::Mat &outimage) c
     cv::cvtColor(result, result, cv::COLOR_Lab2BGR);
     result.convertTo(result, CV_8UC3, 255.0);
     result.copyTo(outimage);
-}
+};
 
 int ColorSiggraph::process(const cv::Mat &inimage, cv::Mat &outimage) const {
 
@@ -385,4 +385,4 @@ int ColorSiggraph::process(const cv::Mat &inimage, cv::Mat &outimage) const {
     }
 
     return 0;
-}
+};

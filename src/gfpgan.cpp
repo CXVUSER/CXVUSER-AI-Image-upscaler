@@ -5,13 +5,13 @@
 GFPGAN::GFPGAN() {
     net.opt.use_vulkan_compute = false;
     net.opt.num_threads = 4;
-}
+};
 
 GFPGAN::~GFPGAN() {
     style_conv_weights.clear();
     to_rgbs_conv_weights.clear();
     net.clear();
-}
+};
 
 static ncnn::Mat generate_noise(const int &c, const int &h, const int &w, const float *weight) {
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
@@ -23,7 +23,7 @@ static ncnn::Mat generate_noise(const int &c, const int &h, const int &w, const 
         noise[i] = dis(gen) * weight[0];
 
     return noise;
-}
+};
 
 static void relu(ncnn::Mat &in, const float &slope) {
     ncnn::Option opt;
@@ -47,7 +47,7 @@ static void relu(ncnn::Mat &in, const float &slope) {
     op->destroy_pipeline(opt);
 
     delete op;
-}
+};
 
 static void binary_add(const ncnn::Mat &a, const ncnn::Mat &b, ncnn::Mat &c) {
     ncnn::Option opt;
@@ -78,7 +78,7 @@ static void binary_add(const ncnn::Mat &a, const ncnn::Mat &b, ncnn::Mat &c) {
     op->destroy_pipeline(opt);
 
     delete op;
-}
+};
 
 static void binary_mul(const ncnn::Mat &a, const ncnn::Mat &b, ncnn::Mat &c) {
     ncnn::Option opt;
@@ -109,7 +109,7 @@ static void binary_mul(const ncnn::Mat &a, const ncnn::Mat &b, ncnn::Mat &c) {
     op->destroy_pipeline(opt);
 
     delete op;
-}
+};
 
 static void innerproduct(const ncnn::Mat &in, const float *weight,
                          const float *bias, const int &inc, const int &num_output, ncnn::Mat &out) {
@@ -149,7 +149,7 @@ static void innerproduct(const ncnn::Mat &in, const float *weight,
     op->destroy_pipeline(opt);
 
     delete op;
-}
+};
 
 static void concat(const ncnn::Mat &a, const ncnn::Mat &b, int axis, ncnn::Mat &c) {
     ncnn::Option opt;
@@ -180,7 +180,7 @@ static void concat(const ncnn::Mat &a, const ncnn::Mat &b, int axis, ncnn::Mat &
     op->destroy_pipeline(opt);
 
     delete op;
-}
+};
 
 static void convolution(const ncnn::Mat &in, const float *weight, int inc, int num_output,
                         int kernel_size, int padding, ncnn::Mat &out) {
@@ -223,7 +223,7 @@ static void convolution(const ncnn::Mat &in, const float *weight, int inc, int n
     op->destroy_pipeline(opt);
 
     delete op;
-}
+};
 
 static void scale(const ncnn::Mat &in, const float &scale, int scale_data_size, ncnn::Mat &out) {
     ncnn::Option opt;
@@ -258,7 +258,7 @@ static void scale(const ncnn::Mat &in, const float &scale, int scale_data_size, 
     op->destroy_pipeline(opt);
 
     delete op;
-}
+};
 
 static void upsample(const ncnn::Mat &in, const float &scale, ncnn::Mat &out) {
     ncnn::Option opt;
@@ -283,7 +283,7 @@ static void upsample(const ncnn::Mat &in, const float &scale, ncnn::Mat &out) {
     op->destroy_pipeline(opt);
 
     delete op;
-}
+};
 
 static void clip(ncnn::Mat &in, const float &min, const float &max) {
     ncnn::Option opt;
@@ -308,7 +308,7 @@ static void clip(ncnn::Mat &in, const float &min, const float &max) {
     op->destroy_pipeline(opt);
 
     delete op;
-}
+};
 
 int GFPGAN::modulated_conv(ncnn::Mat &x, ncnn::Mat &style,
                            const float *self_weight, const float *weights,
@@ -352,7 +352,6 @@ int GFPGAN::modulated_conv(ncnn::Mat &x, ncnn::Mat &style,
             demod[i] = 1.0 / std::sqrt(sum + 0.00000001);
         }
 
-
         for (int i = 0; i < weight.c; i++) {
             float *weight_data = weight.channel(i);
             for (int l = 0; l < weight.d; l++) {
@@ -371,10 +370,8 @@ int GFPGAN::modulated_conv(ncnn::Mat &x, ncnn::Mat &style,
     int paddling = std::floor(kernel_size / 2);
     convolution(x, (const float *) weight.data, hid_dim, num_output, kernel_size, paddling, out);
 
-
     return 0;
-}
-
+};
 
 int GFPGAN::to_rgbs(ncnn::Mat &out, ncnn::Mat &latent, ncnn::Mat &skip,
                     int inc, int hid_dim, int num_output,
@@ -396,9 +393,8 @@ int GFPGAN::to_rgbs(ncnn::Mat &out, ncnn::Mat &latent, ncnn::Mat &skip,
         binary_add(style, skip, skip);
     }
 
-
     return 0;
-}
+};
 
 int GFPGAN::style_convs_modulated_conv(ncnn::Mat &x, ncnn::Mat style, int sample_mode,
                                        int demodulate, ncnn::Mat &out, int inc, int hid_dim, int num_output,
@@ -422,7 +418,7 @@ int GFPGAN::style_convs_modulated_conv(ncnn::Mat &x, ncnn::Mat style, int sample
     relu(out, 0.2);
 
     return 0;
-}
+};
 
 int GFPGAN::load_weights(const wchar_t *model_path, std::vector<StyleConvWeights> &style_conv_weights,
                          std::vector<ToRgbConvWeights> &to_rgbs_conv_weights, ncnn::Mat &const_input) {
@@ -492,10 +488,9 @@ int GFPGAN::load_weights(const wchar_t *model_path, std::vector<StyleConvWeights
     ifs.close();
 
     return 0;
-}
+};
 
 int GFPGAN::load(const std::wstring &path) {
-
     std::wstring param_path = path + L"/face_restore_ncnn/GFPGANCleanv1-NoCE-C2-encoder.param";
     std::wstring model_path = path + L"/face_restore_ncnn/GFPGANCleanv1-NoCE-C2-encoder.bin";
     std::wstring style_path = path + L"/face_restore_ncnn/GFPGANCleanv1-NoCE-C2-style.bin";
@@ -533,7 +528,7 @@ int GFPGAN::load(const std::wstring &path) {
     }
 
     return 0;
-}
+};
 
 int GFPGAN::process(const cv::Mat &img, ncnn::Mat &outimage) {
     ncnn::Mat ncnn_in = ncnn::Mat::from_pixels_resize(img.data, ncnn::Mat::PIXEL_BGR2RGB, img.cols, img.rows, 512, 512);
@@ -598,7 +593,6 @@ int GFPGAN::process(const cv::Mat &img, ncnn::Mat &outimage) {
                                style_conv_weights[14].style_convs_weight.data(),
                                style_conv_weights[14].style_convs_bias.data());
 
-
     //to_rgb1
     ncnn::Mat latent_1 = styles.channel(0).row_range(1, 1);
     ncnn::Mat skip;
@@ -627,7 +621,6 @@ int GFPGAN::process(const cv::Mat &img, ncnn::Mat &outimage) {
         binary_add(out_sft, conditions[i], out_sft);
         concat(out_same, out_sft, 0, out);
 
-
         latent = styles.channel(0).row_range(i + 1, 1);
         style_convs_modulated_conv(out, latent, 0, 1, out, style_conv_weights[i].inc,
                                    style_conv_weights[i].hid_dim, style_conv_weights[i].num_output,
@@ -636,7 +629,6 @@ int GFPGAN::process(const cv::Mat &img, ncnn::Mat &outimage) {
                                    style_conv_weights[i].style_convs_modulated_conv_modulation_bias.data(),
                                    style_conv_weights[i].style_convs_weight.data(),
                                    style_conv_weights[i].style_convs_bias.data());
-
 
         latent = styles.channel(0).row_range(i + 2, 1);
         to_rgbs(out, latent, skip, to_rgbs_conv_weights[j].inc,
@@ -653,4 +645,4 @@ int GFPGAN::process(const cv::Mat &img, ncnn::Mat &outimage) {
     outimage = skip;
 
     return 0;
-}
+};

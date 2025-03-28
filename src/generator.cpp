@@ -2,7 +2,7 @@
 
 Generator::~Generator() {
     generator_net_.clear();
-}
+};
 
 int Generator::Load(const std::wstring &model_path, bool gpu) {
     std::wstring generator_param_path = model_path + L"/face_restore_ncnn/CodeFormer-generator.param";
@@ -71,10 +71,10 @@ int Generator::Load(const std::wstring &model_path, bool gpu) {
     }
 
     return 0;
-}
+};
 
-void Generator::PreProcess(const void *input_data, std::vector<Tensor_t> &input_tensor) {
-}
+void Generator::PreProcess(const void *input_data, std::vector<Tensor_t> &input_tensor){};
+
 void Generator::Normlize(const ncnn::Mat &output, std::vector<float> &output_norm) {
     int size = output.c * output.h * output.w;
 
@@ -85,7 +85,7 @@ void Generator::Normlize(const ncnn::Mat &output, std::vector<float> &output_nor
         float val = output_norm[i] > 1.0 ? 1.0 : (output_norm[i] < -1.0 ? -1.0 : output_norm[i]);
         output_norm[i] = (val + 1.0) / 2.0;
     }
-}
+};
 
 void Generator::Tensor2Image(std::vector<float> &output_tensor, int img_h, int img_w, cv::Mat &output_img) {
     std::vector<cv::Mat> mat_list;
@@ -101,7 +101,8 @@ void Generator::Tensor2Image(std::vector<float> &output_tensor, int img_h, int i
     result_img_f.convertTo(result_img, CV_8UC3, 255.0, 0);
 
     cv::cvtColor(result_img, output_img, cv::COLOR_RGB2BGR);
-}
+};
+
 void Generator::PostProcess(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor, void *result) {
     ncnn::Mat &out = output_tensor[0].data;
 
@@ -112,7 +113,8 @@ void Generator::PostProcess(const std::vector<Tensor_t> &input_tensor, std::vect
     Tensor2Image(out_norm, out.h, out.w, out_img);
 
     out_img.copyTo(((CodeFormerResult_t *) result)->restored_face);
-}
+};
+
 void Generator::Run(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor) {
     ncnn::Extractor generator_ex = generator_net_.create_extractor();
 
@@ -125,7 +127,7 @@ void Generator::Run(const std::vector<Tensor_t> &input_tensor, std::vector<Tenso
         generator_ex.extract(output_indexes_[i], out);
         output_tensor.push_back(Tensor_t(out));
     }
-}
+};
 
 int Generator::Process(const cv::Mat &input_img, void *result) {
     std::vector<Tensor_t> output_tensor;

@@ -3,7 +3,7 @@
 static inline float intersection_area(const Object &a, const Object &b) {
     cv::Rect_<float> inter = a.rect & b.rect;
     return inter.area();
-}
+};
 
 static void qsort_descent_inplace(std::vector<Object> &faceobjects, int left, int right) {
     int i = left;
@@ -37,14 +37,14 @@ static void qsort_descent_inplace(std::vector<Object> &faceobjects, int left, in
             if (i < right) qsort_descent_inplace(faceobjects, i, right);
         }
     }
-}
+};
 
 static void qsort_descent_inplace(std::vector<Object> &faceobjects) {
     if (faceobjects.empty())
         return;
 
     qsort_descent_inplace(faceobjects, 0, faceobjects.size() - 1);
-}
+};
 
 static void nms_sorted_bboxes(const std::vector<Object> &faceobjects, std::vector<int> &picked, float nms_threshold) {
     picked.clear();
@@ -74,11 +74,11 @@ static void nms_sorted_bboxes(const std::vector<Object> &faceobjects, std::vecto
         if (keep)
             picked.push_back(i);
     }
-}
+};
 
 static inline float sigmoid(float x) {
     return static_cast<float>(1.f / (1.f + exp(-x)));
-}
+};
 
 static void
 generate_proposals(const ncnn::Mat &anchors, int stride, const ncnn::Mat &in_pad, const ncnn::Mat &feat_blob,
@@ -155,31 +155,22 @@ generate_proposals(const ncnn::Mat &anchors, int stride, const ncnn::Mat &in_pad
             }
         }
     }
-}
+};
 
 void Face_yolov5_bl::setThreshold(float prob_threshold_, float nms_threshold_) {
     this->prob_threshold = prob_threshold_;
     this->nms_threshold = nms_threshold_;
     return;
-}
-
-void Face_yolov5_bl::Run(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor) {
-}
-
-void Face_yolov5_bl::PreProcess(const void *input_data, std::vector<Tensor_t> &input_tensor) {
-}
-
-void Face_yolov5_bl::PostProcess(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor, void *result) {
-}
+};
 
 Face_yolov5_bl::Face_yolov5_bl() {
     net.opt.use_vulkan_compute = false;
     net.opt.num_threads = 4;
-}
+};
 
 Face_yolov5_bl::~Face_yolov5_bl() {
     net.clear();
-}
+};
 
 int Face_yolov5_bl::Load(const std::wstring &model_path) {
 
@@ -213,7 +204,7 @@ int Face_yolov5_bl::Load(const std::wstring &model_path) {
     }
 
     return 0;
-}
+};
 
 int Face_yolov5_bl::align_warp_face(const cv::Mat &img, Object_t &objects) {
     std::vector<cv::Point2f> face_template;
@@ -233,7 +224,7 @@ int Face_yolov5_bl::align_warp_face(const cv::Mat &img, Object_t &objects) {
     cropped_face.copyTo(objects.trans_img);
 
     return 0;
-}
+};
 
 int Face_yolov5_bl::Process(const cv::Mat &input_img, void *result) {
 
@@ -358,7 +349,7 @@ int Face_yolov5_bl::Process(const cv::Mat &input_img, void *result) {
         align_warp_face(input_img, res->object[i]);
 
     return 0;
-}
+};
 
 void Face_yolov5_bl::draw_objects(const cv::Mat &bgr, const std::vector<Object> &objects) {
 
@@ -397,4 +388,8 @@ void Face_yolov5_bl::draw_objects(const cv::Mat &bgr, const std::vector<Object> 
 
     cv::imshow("image", image);
     cv::waitKey();
-}
+};
+
+void Face_yolov5_bl::Run(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor){};
+void Face_yolov5_bl::PreProcess(const void *input_data, std::vector<Tensor_t> &input_tensor){};
+void Face_yolov5_bl::PostProcess(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor, void *result){};

@@ -28,6 +28,7 @@ public:
     int prepadding;
 
 private:
+    void createSpv();
     ncnn::Net net;
     ncnn::Pipeline *realesrgan_preproc = nullptr;
     ncnn::Pipeline *realesrgan_postproc = nullptr;

@@ -69,7 +69,7 @@ RealESRGAN::RealESRGAN(bool gpu, bool _tta_mode) {
     bicubic_4x = 0;
     tta_mode = _tta_mode;
     this->gpu = gpu;
-}
+};
 
 RealESRGAN::~RealESRGAN() {
     // cleanup preprocess and postprocess pipeline
@@ -95,7 +95,7 @@ RealESRGAN::~RealESRGAN() {
         bicubic_4x->destroy_pipeline(net.opt);
         delete bicubic_4x;
     }
-}
+};
 
 int RealESRGAN::load(const wchar_t *parampath, const wchar_t *modelpath) {
     {
@@ -119,53 +119,7 @@ int RealESRGAN::load(const wchar_t *parampath, const wchar_t *modelpath) {
         fclose(fp);
     }
 
-    if (true == gpu) {
-        // initialize preprocess and postprocess pipeline
-        {
-            std::vector<ncnn::vk_specialization_type> specializations(1);
-#if _WIN32
-            specializations[0].i = 1;
-#else
-            specializations[0].i = 0;
-#endif
-
-            realesrgan_preproc = new ncnn::Pipeline(net.vulkan_device());
-            realesrgan_preproc->set_optimal_local_size_xyz(32, 32, 3);
-
-            realesrgan_postproc = new ncnn::Pipeline(net.vulkan_device());
-            realesrgan_postproc->set_optimal_local_size_xyz(32, 32, 3);
-
-            if (tta_mode) {
-                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
-                    realesrgan_preproc->create(realesrgan_preproc_tta_int8s_spv_data, sizeof(realesrgan_preproc_tta_int8s_spv_data), specializations);
-                else if (net.opt.use_fp16_storage)
-                    realesrgan_preproc->create(realesrgan_preproc_tta_fp16s_spv_data, sizeof(realesrgan_preproc_tta_fp16s_spv_data), specializations);
-                else
-                    realesrgan_preproc->create(realesrgan_preproc_tta_spv_data, sizeof(realesrgan_preproc_tta_spv_data), specializations);
-
-                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
-                    realesrgan_postproc->create(realesrgan_postproc_tta_int8s_spv_data, sizeof(realesrgan_postproc_tta_int8s_spv_data), specializations);
-                else if (net.opt.use_fp16_storage)
-                    realesrgan_postproc->create(realesrgan_postproc_tta_fp16s_spv_data, sizeof(realesrgan_postproc_tta_fp16s_spv_data), specializations);
-                else
-                    realesrgan_postproc->create(realesrgan_postproc_tta_spv_data, sizeof(realesrgan_postproc_tta_spv_data), specializations);
-            } else {
-                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
-                    realesrgan_preproc->create(realesrgan_preproc_int8s_spv_data, sizeof(realesrgan_preproc_int8s_spv_data), specializations);
-                else if (net.opt.use_fp16_storage)
-                    realesrgan_preproc->create(realesrgan_preproc_fp16s_spv_data, sizeof(realesrgan_preproc_fp16s_spv_data), specializations);
-                else
-                    realesrgan_preproc->create(realesrgan_preproc_spv_data, sizeof(realesrgan_preproc_spv_data), specializations);
-
-                if (net.opt.use_fp16_storage && net.opt.use_int8_storage)
-                    realesrgan_postproc->create(realesrgan_postproc_int8s_spv_data, sizeof(realesrgan_postproc_int8s_spv_data), specializations);
-                else if (net.opt.use_fp16_storage)
-                    realesrgan_postproc->create(realesrgan_postproc_fp16s_spv_data, sizeof(realesrgan_postproc_fp16s_spv_data), specializations);
-                else
-                    realesrgan_postproc->create(realesrgan_postproc_spv_data, sizeof(realesrgan_postproc_spv_data), specializations);
-            }
-        }
-    }
+    createSpv();
 
     // bicubic 2x/3x/4x for alpha channel
     {
@@ -206,14 +160,14 @@ int RealESRGAN::load(const wchar_t *parampath, const wchar_t *modelpath) {
     }
 
     return 0;
-}
+};
 
 int RealESRGAN::process(const ncnn::Mat &inimage, ncnn::Mat &outimage) const {
     if (gpu)
         return process_spv(inimage, outimage);
     else
         return process_no_spv(inimage, outimage);
-}
+};
 
 int RealESRGAN::process_spv(const ncnn::Mat &inimage, ncnn::Mat &outimage) const {
     const unsigned char *pixeldata = (const unsigned char *) inimage.data;
@@ -554,7 +508,7 @@ int RealESRGAN::process_spv(const ncnn::Mat &inimage, ncnn::Mat &outimage) const
     net.vulkan_device()->reclaim_staging_allocator(staging_vkallocator);
 
     return 0;
-}
+};
 
 int RealESRGAN::process_no_spv(const ncnn::Mat &inimage, ncnn::Mat &outimage) const {
     const unsigned char *pixeldata = (const unsigned char *) inimage.data;
@@ -818,7 +772,7 @@ int RealESRGAN::process_no_spv(const ncnn::Mat &inimage, ncnn::Mat &outimage) co
     }
 
     return 0;
-}
+};
 
 void RealESRGAN::enableTTA(bool enable) {
     this->tta_mode = enable;
@@ -829,6 +783,10 @@ void RealESRGAN::enableTTA(bool enable) {
     if (realesrgan_postproc)
         delete realesrgan_postproc;
 
+    createSpv();
+};
+
+void RealESRGAN::createSpv() {
     if (true == gpu) {
         // initialize preprocess and postprocess pipeline
         {
@@ -876,4 +834,4 @@ void RealESRGAN::enableTTA(bool enable) {
             }
         }
     }
-}
+};

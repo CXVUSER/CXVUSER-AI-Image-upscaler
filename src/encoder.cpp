@@ -2,7 +2,7 @@
 
 Encoder::~Encoder() {
     encoder_net_.clear();
-}
+};
 
 void Encoder::Topk(const ncnn::Mat &cls_scores, int topk, std::vector<float> &top_idx) {
     top_idx.resize(cls_scores.h);
@@ -21,7 +21,8 @@ void Encoder::Topk(const ncnn::Mat &cls_scores, int topk, std::vector<float> &to
         int index = vec[0].second;
         top_idx[n] = index;
     }
-}
+};
+
 void Encoder::GetCodebookFeat(const ncnn::Mat &soft_one_hot, ncnn::Mat &min_encodings) {
     std::vector<float> top_idx;
     Topk(soft_one_hot, 1, top_idx);
@@ -32,7 +33,7 @@ void Encoder::GetCodebookFeat(const ncnn::Mat &soft_one_hot, ncnn::Mat &min_enco
         float *ptr = min_encodings.row(i);
         ptr[static_cast<int>(top_idx[i])] = 1;
     }
-}
+};
 
 int Encoder::Load(const std::wstring &model_path, bool gpu) {
     std::wstring encoder_param_path = model_path + L"/face_restore_ncnn/CodeFormer-encoder.param";
@@ -102,7 +103,7 @@ int Encoder::Load(const std::wstring &model_path, bool gpu) {
     }
 
     return 0;
-}
+};
 
 void Encoder::Run(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor) {
     ncnn::Extractor encoder_ex = encoder_net_.create_extractor();
@@ -116,14 +117,15 @@ void Encoder::Run(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_
         encoder_ex.extract(output_indexes_[i], out);
         output_tensor.push_back(Tensor_t(out));
     }
-}
+};
 
 void Encoder::PreProcess(const void *input_data, std::vector<Tensor_t> &input_tensor) {
     ncnn::Mat in = ncnn::Mat::from_pixels(((cv::Mat *) input_data)->data, ncnn::Mat::PIXEL_BGR2RGB, ((cv::Mat *) input_data)->cols, ((cv::Mat *) input_data)->rows);
     in.substract_mean_normalize(mean_vals_, norm_vals_);
 
     input_tensor.push_back(Tensor_t(in));
-}
+};
+
 void Encoder::PostProcess(const std::vector<Tensor_t> &input_tensor, std::vector<Tensor_t> &output_tensor, void *result) {
     ncnn::Mat min_encodings;
     GetCodebookFeat(output_tensor[5].data, min_encodings);
@@ -133,7 +135,7 @@ void Encoder::PostProcess(const std::vector<Tensor_t> &input_tensor, std::vector
 
     ((CodeFormerResult_t *) result)->output_tensors.resize(7);
     std::copy(output_tensor.begin(), output_tensor.end(), ((CodeFormerResult_t *) result)->output_tensors.begin());
-}
+};
 
 int Encoder::Process(const cv::Mat &input_img, void *result) {
     if (input_img.empty()) {
@@ -150,4 +152,4 @@ int Encoder::Process(const cv::Mat &input_img, void *result) {
     PostProcess(input_tensor, output_tensor, result);
 
     return 0;
-}
+};

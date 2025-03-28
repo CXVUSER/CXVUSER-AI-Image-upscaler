@@ -3,45 +3,6 @@
 
 #include "helpers.h"
 
-bool pathisfolderw(wchar_t *c) {
-    if (c) {
-        if (wcsrchr(c, L'\\'))
-            return true;
-        if (wcsrchr(c, L'/'))
-            return true;
-        return false;
-    }
-};
-bool pathisfoldera(char *c) {
-    if (c) {
-        if (strrchr(c, '/'))
-            return true;
-        if (strrchr(c, '\\'))
-            return true;
-        return false;
-    }
-};
-wchar_t *getfilew(wchar_t *t) {
-    wchar_t *str = 0;
-    if (t) {
-        if (str = wcsrchr(t, L'/'))
-            return str + 1;
-        if (str = wcsrchr(t, L'\\'))
-            return str + 1;
-    }
-    return str;
-};
-char *getfilea(char *t) {
-    char *str = 0;
-    if (t) {
-        if (str = strrchr(t, '/'))
-            return str + 1;
-        if (str = strrchr(t, '\\'))
-            return str + 1;
-    }
-    return str;
-};
-
 #if defined(_WIN32)
 std::tuple<Microsoft::WRL::ComPtr<IDXCoreAdapter>, D3D_FEATURE_LEVEL> SelectAdapter(
         std::string_view adapterNameFilter) {
@@ -123,7 +84,7 @@ std::tuple<Microsoft::WRL::ComPtr<IDXCoreAdapter>, D3D_FEATURE_LEVEL> SelectAdap
     }
 
     return {adapters[*firstAdapterMatchingNameFilter], featureLevel};
-}
+};
 
 std::tuple<Microsoft::WRL::ComPtr<IDMLDevice>, Microsoft::WRL::ComPtr<ID3D12CommandQueue>> CreateDmlDeviceAndCommandQueue(std::string_view adapterNameFilter) {
     using Microsoft::WRL::ComPtr;
@@ -171,7 +132,7 @@ std::tuple<Microsoft::WRL::ComPtr<IDMLDevice>, Microsoft::WRL::ComPtr<ID3D12Comm
     d3d12Device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&commandQueue));
 
     return {std::move(dmlDevice), std::move(commandQueue)};
-}
+};
 #endif
 
 // Converts a pixel buffer to an NCHW tensor (batch size 1).
@@ -195,7 +156,7 @@ void CopyPixelsToTensor(
         dstT[pixelIndex + 1 * height * width] = g;
         dstT[pixelIndex + 2 * height * width] = b;
     }
-}
+};
 
 // Converts an NCHW tensor buffer (batch size 1) to a pixel buffer.
 // Source: buffer of RGB planes (CHW) using float32/float16 components.
@@ -218,7 +179,7 @@ void CopyTensorToPixels(
         dst[pixelIndex * channels + 1] = g;
         dst[pixelIndex * channels + 2] = b;
     }
-}
+};
 
 #if defined(_WIN32)
 void FillNCHWBufferFromImageFilename(
@@ -364,7 +325,7 @@ void FillNCHWBufferFromImageFilename(
         default:
             throw std::invalid_argument("Unsupported data type");
     }
-}
+};
 
 void SaveNCHWBufferToImageFilename(
         std::wstring_view filename,
@@ -453,5 +414,5 @@ void SaveNCHWBufferToImageFilename(
     frame->WriteSource(bitmap.Get(), nullptr);
     frame->Commit();
     encoder->Commit();
-}
+};
 #endif
