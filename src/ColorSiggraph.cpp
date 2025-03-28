@@ -173,30 +173,25 @@ void ColorSiggraph::process_Siggraph17(const cv::Mat &inimage, cv::Mat &outimage
 
 void ColorSiggraph::process_deoldify(const cv::Mat &inimage, cv::Mat &outimage) const {
 
-    // Загрузка изображения
     cv::UMat image = inimage.clone().getUMat(cv::ACCESS_RW);
 
-    // Конвертация в LAB и выделение канала L
     cv::UMat targetLAB, targetL, A, B;
     cv::cvtColor(image, targetLAB, cv::COLOR_BGR2Lab);
     cv::extractChannel(targetLAB, targetL, 0);
 
-    // Конвертация в градации серого и обратно в RGB
     cv::cvtColor(image, image, cv::COLOR_BGR2GRAY);
     cv::cvtColor(image, image, cv::COLOR_GRAY2RGB);
 
     int h = image.rows;
     int w = image.cols;
 
-    // Изменение размера изображения
-    int r_factor = (type == 2) ? 256 : 512;// Примерное значение
+    int r_factor = (type == 2) ? 256 : 512;
     cv::resize(image, image, cv::Size(r_factor, r_factor));
 
     image.convertTo(image, CV_32F);
 
     cv::Mat nchw_data = cv::dnn::blobFromImage(image, 1.0, cv::Size(), cv::Scalar(), false, false, CV_32F);
 
-    // Подготовка входных данных
     Ort::AllocatorWithDefaultOptions ortAllocator;
     auto inputName = ortSession->GetInputNameAllocated(0, ortAllocator);
     auto inputTypeInfo = ortSession->GetInputTypeInfo(0);
@@ -219,7 +214,6 @@ void ColorSiggraph::process_deoldify(const cv::Mat &inimage, cv::Mat &outimage) 
         inputTensorSize *= static_cast<float>(dim);
     }
 
-    // Создание входного тензора
     Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
     Ort::Value input_tensor = Ort::Value::CreateTensor<float>(memoryInfo,
                                                               (float *) nchw_data.data,
@@ -236,33 +230,22 @@ void ColorSiggraph::process_deoldify(const cv::Mat &inimage, cv::Mat &outimage) 
     ortSession->Run(runOpts, bindings);
     bindings.SynchronizeOutputs();
 
-    // Получение результатов
     float *output_data = (float *) bindings.GetOutputValues()[0].GetTensorRawData();
-    //cv::Mat data(256, 256, CV_32FC4, output_data);
 
-    //// Объединяем в OpenCV-формат (HWC)
-    //std::vector<cv::Mat> result_image;
-    //cv::dnn::imagesFromBlob(data, result_image);
-    // Размер каждого канала
     size_t channelSize = static_cast<size_t>(r_factor * r_factor);
 
-    // Извлекаем данные по каналам и создаём для каждого канал cv::Mat.
-    // Здесь предполагается, что данные расположены подряд: сначала весь первый канал, затем второй, затем третий.
     std::vector<cv::Mat> channels;
     for (int i = 0; i < outputShape[1]; i++) {
-        // Создаем заголовок для матрицы, без копирования данных (для безопасности делаем clone ниже)
         cv::Mat channel(r_factor, r_factor, CV_32F, const_cast<float *>(output_data + i * channelSize));
-        channels.push_back(channel.clone());// clone гарантирует непрерывность данных
+        channels.push_back(channel.clone());
     }
 
-    // Объединяем каналы в одно изображение формата HWC (RGB)
     cv::UMat colorized;
     cv::merge(channels, colorized);
 
     colorized.convertTo(colorized, CV_8UC3);
     cv::cvtColor(colorized, colorized, cv::COLOR_BGR2RGB);
 
-    // Постобработка изображения
     cv::resize(colorized, colorized, cv::Size(w, h));
     cv::GaussianBlur(colorized, colorized, cv::Size(13, 13), 0);
 
@@ -273,7 +256,6 @@ void ColorSiggraph::process_deoldify(const cv::Mat &inimage, cv::Mat &outimage) 
     cv::resize(lab_channels[1], lab_channels[1], cv::Size(w, h));
     cv::resize(lab_channels[2], lab_channels[2], cv::Size(w, h));
 
-    // Объединение каналов L из исходного изображения и A, B из colorized
     cv::UMat result;
     std::vector<cv::UMat> merged_channels = {targetL, lab_channels[1], lab_channels[2]};
     cv::merge(merged_channels, result);
@@ -283,31 +265,25 @@ void ColorSiggraph::process_deoldify(const cv::Mat &inimage, cv::Mat &outimage) 
 };
 
 void ColorSiggraph::process_DDColor(const cv::Mat &inimage, cv::Mat &outimage) const {
-    // Загрузка изображения
+
     cv::UMat image = inimage.clone().getUMat(cv::ACCESS_RW);
     image.convertTo(image, CV_32F, 1.0 / 255.0);
 
-    // Конвертация в LAB и выделение канала L
     cv::UMat targetLAB, targetL, A, B;
     cv::cvtColor(image, targetLAB, cv::COLOR_BGR2Lab);
     cv::extractChannel(targetLAB, targetL, 0);
 
-    //image.convertTo(image, CV_32F, 100.0 / 255.0); [0.255 -> 0.100]
-
-    // Конвертация в градации серого и обратно в RGB
     cv::cvtColor(image, image, cv::COLOR_BGR2GRAY);
     cv::cvtColor(image, image, cv::COLOR_GRAY2RGB);
 
     int h = image.rows;
     int w = image.cols;
 
-    // Изменение размера изображения
     int r_factor = (type == 4) ? 256 : 512;
     cv::resize(image, image, cv::Size(r_factor, r_factor));
 
     cv::Mat nchw_data = cv::dnn::blobFromImage(image, 1.0, cv::Size(), cv::Scalar(), false, false, CV_32F);
 
-    // Подготовка входных данных
     Ort::AllocatorWithDefaultOptions ortAllocator;
     auto inputName = ortSession->GetInputNameAllocated(0, ortAllocator);
     auto inputTypeInfo = ortSession->GetInputTypeInfo(0);
@@ -324,7 +300,6 @@ void ColorSiggraph::process_DDColor(const cv::Mat &inimage, cv::Mat &outimage) c
         inputTensorSize *= static_cast<float>(dim);
     }
 
-    // Создание входного тензора
     Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
     Ort::Value input_tensor = Ort::Value::CreateTensor<float>(memoryInfo,
                                                               (float *) nchw_data.data,
@@ -341,15 +316,13 @@ void ColorSiggraph::process_DDColor(const cv::Mat &inimage, cv::Mat &outimage) c
     ortSession->Run(runOpts, bindings);
     bindings.SynchronizeOutputs();
 
-    // Получение результатов
     float *output_data = (float *) bindings.GetOutputValues()[0].GetTensorRawData();
 
-    // Размер каждого канала
     size_t channelSize = static_cast<size_t>(r_factor * r_factor);
     std::vector<cv::Mat> channels;
     for (int i = 0; i < outputShape[1]; i++) {
         cv::Mat channel(r_factor, r_factor, CV_32F, const_cast<float *>(output_data + i * channelSize));
-        channels.push_back(channel.clone());// clone гарантирует непрерывность данных
+        channels.push_back(channel.clone());
     }
 
     cv::UMat a(w, h, CV_32F);
@@ -358,7 +331,6 @@ void ColorSiggraph::process_DDColor(const cv::Mat &inimage, cv::Mat &outimage) c
     cv::resize(channels[0], a, cv::Size(w, h), 0, 0, cv::INTER_LINEAR);
     cv::resize(channels[1], b, cv::Size(w, h), 0, 0, cv::INTER_LINEAR);
 
-    // Объединение каналов L из исходного изображения и A, B из colorized
     cv::UMat result;
     std::vector<cv::UMat> merged_channels = {targetL, a, b};
     cv::merge(merged_channels, result);

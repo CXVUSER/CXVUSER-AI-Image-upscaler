@@ -420,50 +420,32 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
 
 cv::Mat preprocessImage(const cv::Mat &inputImage) {
 
-    // Создание blob: cv::dnn::blobFromImage выполняет автоматическую перестановку из HWC в CHW
-    // Здесь scaleFactor равен 1.0, поскольку мы уже делим на 255.
-    // Параметр swapRB установлен в false, так как мы уже перевели в RGB.
-    // Приведение к типу float32 (если изображение загружено, например, через imread, то оно имеет тип CV_8UC3)
     cv::Mat blob = cv::dnn::blobFromImage(inputImage, 1.0 / 255.0, cv::Size(), cv::Scalar(), true, false, CV_32F);
-    // Теперь blob имеет форму [1, 3, H, W] (NCHW)
-
-    //// 6. Нормализация: операция (img - 0.5)/0.5 равносильна (2*img - 1)
-    ////    Применяем нормализацию по всему blob
     blob = blob * 2.0 - 1.0;
 
-    //// 7. Blob уже имеет размерность батча (N=1), поэтому дополнительных действий не требуется.
     return blob;
 };
 
-// Функция postProcessImage преобразует выходной тензор модели в cv::Mat.
 cv::Mat postProcessImage(const float *outputData, const std::vector<int64_t> &outputShape) {
     int N = static_cast<int>(outputShape[0]);
     int C = static_cast<int>(outputShape[1]);
     int H = static_cast<int>(outputShape[2]);
     int W = static_cast<int>(outputShape[3]);
 
-    // Размер каждого канала
     size_t channelSize = static_cast<size_t>(H * W);
 
-    // Извлекаем данные по каналам и создаём для каждого канал cv::Mat.
-    // Здесь предполагается, что данные расположены подряд: сначала весь первый канал, затем второй, затем третий.
     std::vector<cv::Mat> channels;
     for (int i = 0; i < C; i++) {
-        // Создаем заголовок для матрицы, без копирования данных (для безопасности делаем clone ниже)
         cv::Mat channel(H, W, CV_32F, const_cast<float *>(outputData + i * channelSize));
-        channels.push_back(channel.clone());// clone гарантирует непрерывность данных
+        channels.push_back(channel.clone());
     }
 
-    // Объединяем каналы в одно изображение формата HWC (RGB)
     cv::Mat image;
     cv::merge(channels, image);
 
-    // Преобразуем значения из диапазона [-1, 1] в [0, 255].
-    // Формула: image_out = (image + 1) / 2 * 255
     image = (image + 1.0f) / 2.0f * 255.0f;
     image.convertTo(image, (C == 3) ? CV_8UC3 : CV_8UC4);
 
-    // Если требуется, преобразуем изображение из RGB в BGR для корректного отображения/сохранения OpenCV
     cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
 
     return image;
@@ -515,8 +497,6 @@ cv::Mat PipeLine::inferFaceModel(
     auto bindings = Ort::IoBinding::IoBinding(*ortSession);
 
     if (pipe.face_model.find(L"codeformer", 0) != std::string::npos) {
-        // ===== Создаём второй входной тензор (fidelity) =====
-        // Форма для fidelity – одномерный тензор с одним элементом.
         std::array<int64_t, 1> fidelityShape = {1};
         std::vector<double> fidelityValue{pipe.w};
         auto fidelityTensor = Ort::Value::CreateTensor(
