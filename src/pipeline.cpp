@@ -31,6 +31,7 @@ void PipeLine::Clear() {
         delete codeformer_ncnn;
     if (parsing_net)
         delete parsing_net;
+    crops.clear();
     ncnn::destroy_gpu_instance();
 };
 
