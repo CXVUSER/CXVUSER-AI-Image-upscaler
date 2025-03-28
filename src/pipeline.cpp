@@ -124,7 +124,7 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
 
         face_upsampler->process(bg_presample, bg_upsamplencnn);
         cv::Mat dummy(bg_upsamplencnn.h, bg_upsamplencnn.w,
-                      (restored_face.channels() == 3) ? CV_8UC3 : CV_8UC4, (void *) bg_upsamplencnn.data);
+                      CV_8UC(restored_face.channels()), (void *) bg_upsamplencnn.data);
         upscaled_face = dummy.clone();
 
         trans_matrix_inv /= ups_f;
@@ -444,7 +444,7 @@ cv::Mat tensor2image(const float *outputData, const std::vector<int64_t> &output
     cv::merge(channels, image);
 
     image = (image + 1.0f) / 2.0f * 255.0f;
-    image.convertTo(image, (C == 3) ? CV_8UC3 : CV_8UC4);
+    image.convertTo(image, CV_8UC(C));
 
     cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
 
