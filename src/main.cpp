@@ -11,7 +11,7 @@
 
 #include <opencv2\core\ocl.hpp>
 
-#define VER "2.00"
+#define VER "2.01"
 
 static wchar_t *optarg = NULL;
 static int optind = 1;
@@ -60,7 +60,7 @@ static void print_usage() {
                       " -z <string>   FaceUpsample model (ESRGAN)\n"
                       " -p            Use face parsing for accurate face masking (default=false)\n"
                       " -o <string>   Override image input path\n"
-                      " -l <string>   Face detector model (default=y7, options: y7, y5, rt (RetinaFace R50))\n"
+                      " -l <string>   Face detector model (default=y7, options: y7, y5, (RetinaFace: rt, mnet))\n"
                       " -h            Colorize grayscale photo with DeOldify Artistic\n"
                       " -n            No upsample\n"
                       " -a            Wait (pause execution)\n"
@@ -89,6 +89,19 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call,
     return TRUE;// Successful DLL_PROCESS_ATTACH.
 }
 #else
+
+__declspec(noinline) char *getfilea(char *t) {
+    char *str = 0;
+    if (!t)
+        return 0;
+    if (str = strrchr(t, '/'))
+        return str + 1;
+    if (str = strrchr(t, '\\'))
+        return str + 1;
+    if (str == 0)
+        return t;
+    return str;
+};
 
 #if _WIN32
 int wmain(int argc, wchar_t **argv)
