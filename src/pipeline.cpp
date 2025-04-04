@@ -326,7 +326,10 @@ int PipeLine::CreatePipeLine(PipelineConfig_t &pipeline_config) {
     if (true == pipe.onnx) {
         if (!pipe.face_model.empty()) {
             fprintf(stderr, "Loading onnx model...\n");
-            ortSession = new Ort::Session(*env, pipe.face_model.c_str(), sessionOptions);
+            std::wstring path = pipe.face_model;
+            path += L".onnx";
+
+            ortSession = new Ort::Session(*env, path.c_str(), sessionOptions);
             fprintf(stderr, "Loading onnx model finished...\n");
         }
     } else {
