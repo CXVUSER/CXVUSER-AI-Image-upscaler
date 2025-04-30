@@ -36,61 +36,6 @@ typedef struct _PipelineConfig {
     int tilesize = 0;
 } PipelineConfig_t;
 
-enum AI_SettingsOp {
-    //ESRGAN model
-    //supports ncnn *.bin:*.param files
-    //.esr_model in PipelineConfig_t
-    //relative or absolute paths without extensions
-    CHANGE_ESR = 1,
-
-    //Face restore model
-    //supports onnx *.onnx files
-    //.face_model in PipelineConfig_t
-    //relative or absolute paths without extensions
-    CHANGE_GFP,
-
-    //Face detect model
-    //supports only ncnn models
-    //.face_det_model in PipelineConfig_t
-    //(y7 = yolov7_lite_e|y5 = yolov5blazeface|r50 = retinaface)
-    CHANGE_FACE_DET,
-
-    //ESRGAN face upsample model
-    //supports ncnn *.bin:*.param files
-    //.esr_model in PipelineConfig_t
-    //relative or absolute paths without extensions
-    CHANGE_FACE_UP_M,
-
-    //.custom_scale in PipelineConfig_t
-    CHANGE_SCALE_FACTOR,
-
-    //.w in PipelineConfig_t
-    CHANGE_CODEFORMER_FID,
-
-    //.prob_thr and .nms_thr in PipelineConfig_t
-    CHANGE_FACEDECT_THD,
-
-    //Use face parse model
-    //.useParse in PipelineConfig_t
-    CHANGE_FACE_PARSE,
-
-    //Change inver (onnx,ncnn)
-    //.ncnn .onnx .codeformer in PipelineConfig_t
-    CHANGE_INFER,
-
-    //Change colorization state
-    //.colorize in PipelineConfig_t
-    CHANGE_COLOR,
-
-    // Change colorization (pre/post)
-    //.preColorize .postColorize in PipelineConfig_t
-    CHANGE_COLOR_STATE,
-
-    // Change ESR bg upsampling settings
-    //.tta_mode .twox_mode
-    CHANGE_ESR_FLAGS
-};
-
 #if defined(AS_DLL)
 #define CLASS_EXPORT class __declspec(dllexport)
 #else
@@ -101,14 +46,25 @@ CLASS_EXPORT PipeLine {
 public:
     PipeLine();
     ~PipeLine();
-    int CreatePipeLine(PipelineConfig_t & pipeline_config);
+    int LaunchEngine(PipelineConfig_t & pipeline_config);
 
     cv::Mat Apply(const cv::Mat &input_img);
     static PipeLine *getApi();
-    void changeSettings(int type, PipelineConfig_t &cfg);
     int getModelScale(std::wstring str_bins);
     int getEffectiveTilesize();
     std::vector<cv::Mat> &getCrops();
+    int load_bg_esr_model(PipelineConfig_t & cfg);
+    int load_face_model(PipelineConfig_t & cfg);
+    int load_face_up_model(PipelineConfig_t & cfg);
+    int load_face_det_model(PipelineConfig_t & cfg);
+    int changeScaleFactor(PipelineConfig_t & cfg);
+    int changeCodeformerFiledily(PipelineConfig_t & cfg);
+    int setFaceDetectorThreshold(PipelineConfig_t & cfg);
+    int setUseParse(PipelineConfig_t & cfg);
+    int switchToNCNNFaceModels(PipelineConfig_t & cfg);
+    int load_color_model(PipelineConfig_t & cfg);
+    int changeColorState(PipelineConfig_t & cfg);
+    int setESRTTAand2x(PipelineConfig_t & cfg);
 
 private:
     cv::Mat inferFaceModel(
