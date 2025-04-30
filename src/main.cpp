@@ -115,8 +115,8 @@ int main(int argc, char **argv)
     //default selected models
     std::wstring esr_model = L"./models/ESRGAN/4xNomos8kSC";
     char esr_modela[_MAX_PATH] = "./models/ESRGAN/4xNomos8kSC";
-    std::wstring face_restore_model_onnx = L"./models/face_restore/codeformer_0_1_0.onnx";
-    char gfp_modela[_MAX_PATH] = "./models/face_restore/codeformer_0_1_0.onnx";
+    std::wstring face_restore_model_onnx = L"./models/face_restore/codeformer_0_1_0";
+    char gfp_modela[_MAX_PATH] = "./models/face_restore/codeformer_0_1_0";
     char color_modela[_MAX_PATH] = "./models/COLOR/deoldify_artistic";
     std::wstring color_model = L"./models/COLOR/deoldify_artistic";
     std::wstring out_path;
