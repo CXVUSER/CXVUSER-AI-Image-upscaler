@@ -250,31 +250,36 @@ int FaceR::Load(const std::wstring &model_path) {
         model_bin = model_path + L"/face_det/retinaface-R50.bin";
     }
 
-    FILE *f = _wfopen(model_param.c_str(), L"rb");
-    if (f) {
-        int ret = net_.load_param(f);
-        fclose(f);
-        if (ret < 0) {
+    {
+        FILE *f = _wfopen(model_param.c_str(), L"rb");
+        if (!f) {
             fwprintf(stderr, L"open param file %s failed\n", model_param.c_str());
             return -1;
         }
-    } else {
-        fwprintf(stderr, L"open param file %s failed\n", model_param.c_str());
-        return -1;
-    }
 
-    f = _wfopen(model_bin.c_str(), L"rb");
-    if (f) {
-        int ret = net_.load_model(f);
+        int status = net_.load_param(f);
         fclose(f);
-        if (ret < 0) {
-            fwprintf(stderr, L"open model file %s failed\n", model_bin.c_str());
+        if (status != 0) {
+            fwprintf(stderr, L"open param file %s failed\n", model_param.c_str());
             return -1;
         }
-    } else {
-        fwprintf(stderr, L"open model file %s failed\n", model_bin.c_str());
-        return -1;
     }
+
+    {
+        FILE *f = _wfopen(model_bin.c_str(), L"rb");
+        if (!f) {
+            fwprintf(stderr, L"open bin file %s failed\n", model_bin.c_str());
+            return -1;
+        }
+
+        int status = net_.load_model(f);
+        fclose(f);
+        if (status != 0) {
+            fwprintf(stderr, L"open bin file %s failed\n", model_bin.c_str());
+            return -1;
+        }
+    }
+    return 0;
 };
 
 int FaceR::Process(const cv::Mat &bgr, void *result) {

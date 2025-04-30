@@ -102,21 +102,29 @@ int RealESRGAN::load(const wchar_t *parampath, const wchar_t *modelpath) {
         FILE *fp = _wfopen(parampath, L"rb");
         if (!fp) {
             fwprintf(stderr, L"🚨 Error: Failed to open %ls\n", parampath);
+            return -1;
         }
 
-        net.load_param(fp);
-
+        int status = net.load_param(fp);
         fclose(fp);
+        if (status != 0) {
+            fwprintf(stderr, L"🚨 Error: Failed to open %ls\n", parampath);
+            return -1;
+        }
     }
     {
         FILE *fp = _wfopen(modelpath, L"rb");
         if (!fp) {
             fwprintf(stderr, L"🚨 Error: Failed to open %ls\n", modelpath);
+            return -1;
         }
 
-        net.load_model(fp);
-
+        int status = net.load_model(fp);
         fclose(fp);
+        if (status != 0) {
+            fwprintf(stderr, L"🚨 Error: Failed to open %ls\n", parampath);
+            return -1;
+        }
     }
 
     createSpv();

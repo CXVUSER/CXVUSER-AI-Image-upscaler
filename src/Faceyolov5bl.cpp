@@ -177,30 +177,36 @@ int Face_yolov5_bl::Load(const std::wstring &model_path) {
     std::wstring model_p = model_path + L"/face_det/yolov5-blazeface.bin";
     std::wstring param_p = model_path + L"/face_det/yolov5-blazeface.param";
 
-    FILE *f = _wfopen(param_p.c_str(), L"rb");
-    if (f) {
-        int ret = net.load_param(f);
-        fclose(f);
-        if (ret < 0) {
+    {
+        FILE *f = _wfopen(param_p.c_str(), L"rb");
+        if (!f) {
             fwprintf(stderr, L"open param file %s failed\n", param_p.c_str());
             return -1;
         }
-    } else {
-        fwprintf(stderr, L"open param file %s failed\n", param_p.c_str());
-        return -1;
+
+        int status = net.load_param(f);
+        fclose(f);
+        if (status != 0) {
+            fwprintf(stderr, L"open param file %s failed\n", param_p.c_str());
+            fclose(f);
+            return -1;
+        }
     }
 
-    f = _wfopen(model_p.c_str(), L"rb");
-    if (f) {
-        int ret = net.load_model(f);
-        fclose(f);
-        if (ret < 0) {
+    {
+        FILE *f = _wfopen(model_p.c_str(), L"rb");
+        if (!f) {
             fwprintf(stderr, L"open bin file %s failed\n", model_p.c_str());
             return -1;
         }
-    } else {
-        fwprintf(stderr, L"open bin file %s failed\n", model_p.c_str());
-        return -1;
+
+        int status = net.load_model(f);
+        fclose(f);
+        if (status != 0) {
+            fwprintf(stderr, L"open bin file %s failed\n", model_p.c_str());
+            fclose(f);
+            return -1;
+        }
     }
 
     return 0;

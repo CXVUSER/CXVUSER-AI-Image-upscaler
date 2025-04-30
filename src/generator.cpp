@@ -22,30 +22,34 @@ int Generator::Load(const std::wstring &model_path, bool gpu) {
         generator_net_.opt.use_bf16_storage = false;
     }
 
-    FILE *f = _wfopen(generator_param_path.c_str(), L"rb");
-    if (f) {
-        int ret = generator_net_.load_param(f);
-        fclose(f);
-        if (ret < 0) {
+    {
+        FILE *f = _wfopen(generator_param_path.c_str(), L"rb");
+        if (!f) {
             fwprintf(stderr, L"open param file %s failed\n", generator_param_path.c_str());
             return -1;
         }
-    } else {
-        fwprintf(stderr, L"open param file %s failed\n", generator_param_path.c_str());
-        return -1;
+
+        int status = generator_net_.load_param(f);
+        fclose(f);
+        if (status != 0) {
+            fwprintf(stderr, L"open param file %s failed\n", generator_param_path.c_str());
+            return -1;
+        }
     }
 
-    f = _wfopen(generator_model_path.c_str(), L"rb");
-    if (f) {
-        int ret = generator_net_.load_model(f);
-        fclose(f);
-        if (ret < 0) {
+    {
+        FILE *f = _wfopen(generator_model_path.c_str(), L"rb");
+        if (!f) {
             fwprintf(stderr, L"open bin file %s failed\n", generator_model_path.c_str());
             return -1;
         }
-    } else {
-        fwprintf(stderr, L"open bin file %s failed\n", generator_model_path.c_str());
-        return -1;
+
+        int status = generator_net_.load_model(f);
+        fclose(f);
+        if (status != 0) {
+            fwprintf(stderr, L"open bin file %s failed\n", generator_model_path.c_str());
+            return -1;
+        }
     }
 
     input_indexes_.resize(6);

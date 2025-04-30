@@ -70,43 +70,54 @@ int ColorSiggraph::load(Ort::SessionOptions &sessOpt, std::wstring &model) {
         std::wstring model_bin = model;
         model_bin += L".bin";
 
-        FILE *f = _wfopen(model_param.c_str(), L"rb");
-        if (f) {
-            int ret = net.load_param(f);
-            fclose(f);
-            if (ret < 0) {
+        {
+            FILE *f = _wfopen(model_param.c_str(), L"rb");
+            if (!f) {
                 fwprintf(stderr, L"open param file %s failed\n", model_param.c_str());
                 return -1;
             }
-        } else {
-            fwprintf(stderr, L"open param file %s failed\n", model_param.c_str());
-            return -1;
+
+            int status = net.load_param(f);
+            fclose(f);
+            if (status != 0) {
+                fwprintf(stderr, L"open param file %s failed\n", model_param.c_str());
+                return -1;
+            }
         }
 
-        f = _wfopen(model_bin.c_str(), L"rb");
-        if (f) {
-            int ret = net.load_model(f);
-            fclose(f);
-            if (ret < 0) {
+        {
+            FILE *f = _wfopen(model_bin.c_str(), L"rb");
+            if (!f) {
                 fwprintf(stderr, L"open bin file %s failed\n", model_bin.c_str());
                 return -1;
             }
-        } else {
-            fwprintf(stderr, L"open bin file %s failed\n", model_bin.c_str());
-            return -1;
+
+            int status = net.load_model(f);
+            fclose(f);
+            if (status != 0) {
+                fwprintf(stderr, L"open bin file %s failed\n", model_bin.c_str());
+                return -1;
+            }
         }
         type = 0;
     } else if (model.find(L"deoldify", 0) != std::string::npos) {
+
         std::wstring model_param = model;
         model_param += L".onnx";
+
         env = new Ort::Env(ORT_LOGGING_LEVEL_WARNING, "DeOldify");
         ortSession = new Ort::Session(*env, model_param.c_str(), sessOpt);
+
         type = model.find(L"artistic", 0) != std::string::npos ? 2 : 1;
+
     } else if (model.find(L"ddcolor", 0) != std::string::npos) {
+
         std::wstring model_param = model;
         model_param += L".onnx";
+
         env = new Ort::Env(ORT_LOGGING_LEVEL_WARNING, "DDColor");
         ortSession = new Ort::Session(*env, model_param.c_str(), sessOpt);
+
         type = model.find(L"tiny", 0) != std::string::npos ? 4 : 3;
     }
 

@@ -54,30 +54,34 @@ int Encoder::Load(const std::wstring &model_path, bool gpu) {
         encoder_net_.opt.use_bf16_storage = false;
     }
 
-    FILE *f = _wfopen(encoder_param_path.c_str(), L"rb");
-    if (f) {
-        int ret = encoder_net_.load_param(f);
-        fclose(f);
-        if (ret < 0) {
-            fprintf(stderr, "open bin file %s failed\n", encoder_param_path.c_str());
+    {
+        FILE *f = _wfopen(encoder_param_path.c_str(), L"rb");
+        if (!f) {
+            fwprintf(stderr, L"open param file %s failed\n", encoder_param_path.c_str());
             return -1;
         }
-    } else {
-        fprintf(stderr, "open bin file %s failed\n", encoder_param_path.c_str());
-        return -1;
+
+        int status = encoder_net_.load_param(f);
+        fclose(f);
+        if (status != 0) {
+            fwprintf(stderr, L"open param file %s failed\n", encoder_param_path.c_str());
+            return -1;
+        }
     }
 
-    f = _wfopen(encoder_model_path.c_str(), L"rb");
-    if (f) {
-        int ret = encoder_net_.load_model(f);
-        fclose(f);
-        if (ret < 0) {
-            fprintf(stderr, "open bin file %s failed\n", encoder_model_path.c_str());
+    {
+        FILE *f = _wfopen(encoder_model_path.c_str(), L"rb");
+        if (!f) {
+            fwprintf(stderr, L"open bin file %s failed\n", encoder_model_path.c_str());
             return -1;
         }
-    } else {
-        fprintf(stderr, "open bin file %s failed\n", encoder_model_path.c_str());
-        return -1;
+
+        int status = encoder_net_.load_model(f);
+        fclose(f);
+        if (status != 0) {
+            fwprintf(stderr, L"open bin file %s failed\n", encoder_model_path.c_str());
+            return -1;
+        }
     }
 
     for (const auto &input: encoder_net_.input_indexes()) {
