@@ -410,7 +410,9 @@ cv::Mat PipeLine::Apply(const cv::Mat &input_img) {
     cv::UMat img_upsample_umat;
     cv::Mat img_alpha;
 
-    if (img_input.channels() == 4) {
+    if (img_input.channels() == 1) {
+        cv::cvtColor(img_input, img_input, cv::COLOR_GRAY2BGR);
+    } else if (img_input.channels() == 4) {
         cv::extractChannel(img_input, img_alpha, 3);
         cv::cvtColor(img_input, img_input, cv::COLOR_BGRA2BGR);
     }
