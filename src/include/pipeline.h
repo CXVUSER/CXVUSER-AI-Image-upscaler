@@ -6,7 +6,11 @@
 #include "include/ColorSiggraph.h"
 #include "include/Faceyolov5bl.h"
 #include "include/Faceyolov7_lite_e.h"
+#if defined(_WIN32)
+#if defined(USE_DM)
 #include "include/helpers.h"
+#endif
+#endif
 #include "include/retinaface.h"
 #include "realesrgan.h"
 #include <opencv2\core\ocl.hpp>
@@ -36,11 +40,7 @@ typedef struct _PipelineConfig {
     int tilesize = 0;
 } PipelineConfig_t;
 
-#if defined(AS_DLL)
 #define CLASS_EXPORT class __declspec(dllexport)
-#else
-#define CLASS_EXPORT class
-#endif
 
 CLASS_EXPORT PipeLine {
 public:
@@ -82,14 +82,16 @@ private:
     ColorSiggraph *color = nullptr;
 
     //ONNX
-    Ort::SessionOptions sessionOptions;
+    Ort::SessionOptions *sessionOptions = nullptr;
     const OrtApi &ortApi = Ort::GetApi();
     Ort::Env *env = nullptr;
     Ort::Session *ortSession = nullptr;
 
 #if defined(_WIN32)
+#if defined(USE_DM)
     std::tuple<Microsoft::WRL::ComPtr<IDMLDevice>, Microsoft::WRL::ComPtr<ID3D12CommandQueue>> dml;
     const OrtDmlApi *ortDmlApi = nullptr;
+#endif
 #endif
 };
 #endif// PIPELINE_H

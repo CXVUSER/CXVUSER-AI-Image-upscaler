@@ -1,6 +1,7 @@
 #ifndef COLORNET_H_INCLUDED
 #define COLORNET_H_INCLUDED
-#include "include/helpers.h"
+//#include "include/helpers.h"
+#include "onnxruntime_cxx_api.h"
 #include "include/model.h"
 
 class ColorSiggraph {

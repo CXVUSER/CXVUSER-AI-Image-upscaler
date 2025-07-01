@@ -4,7 +4,9 @@
 #include <numeric>
 
 #if defined(_WIN32)
+#if defined(USE_DM)
 #include "include\helpers.h"
+#endif
 #endif
 
 PipeLine::PipeLine(){};
@@ -15,10 +17,12 @@ PipeLine::~PipeLine() {
 void PipeLine::Clear() {
     if (face_detector)
         delete face_detector;
-    if (env)
-        delete env;
+    if (sessionOptions)
+        delete sessionOptions;
     if (ortSession)
         delete ortSession;
+    if (env)
+        delete env;
     if (color)
         delete color;
     if (bg_upsampler)
@@ -256,27 +260,41 @@ int PipeLine::LaunchEngine(PipelineConfig_t &pipeline_config) {
 
     {//Setup onnx inference
 #if defined(_WIN32)
-        sessionOptions.DisableMemPattern();
-        sessionOptions.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+#if defined(USE_CD)
+        sessionOptions = new Ort::SessionOptions();
+        sessionOptions->EnableMemPattern();
+        sessionOptions->SetExecutionMode(ExecutionMode::ORT_PARALLEL);
+        if (pipe.gpu) {
+            Ort::Status status(OrtSessionOptionsAppendExecutionProvider_Tensorrt(*sessionOptions, 0));
 
+            if (false == status.IsOK()) {
+                OrtSessionOptionsAppendExecutionProvider_CUDA(*sessionOptions, 0);
+            }
+        }
+#endif
+#if defined(USE_DM)
+
+        sessionOptions = new Ort::SessionOptions();
+        sessionOptions->DisableMemPattern();
+        sessionOptions->SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
         // By passing in an explicitly created DML device & queue, the DML execution provider sends work
         // to the desired device. If not used, the DML execution provider will create its own device & queue.
         if (pipe.gpu) {
             dml = CreateDmlDeviceAndCommandQueue("");
-            Ort::ThrowOnError(ortApi.GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void **>(&ortDmlApi)));
-            Ort::ThrowOnError(ortDmlApi->SessionOptionsAppendExecutionProvider_DML1(
-                    sessionOptions,
+            ortApi.GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void **>(&ortDmlApi));
+            ortDmlApi->SessionOptionsAppendExecutionProvider_DML1(
+                    *sessionOptions,
                     get<0>(dml).Get(),
-                    get<1>(dml).Get()));
+                    get<1>(dml).Get());
         }
-#else if defined(__linux__)
-        if (pipe.gpu) {
-
-            sessionOptions.SetExecutionMode(ExecutionMode::ORT_PARALLEL);
-#if defined(ROCmbuild)
-            Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_ROCM(sessionOptions, 0));//AMD
 #endif
-            Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0));//NVIDIA
+#else if defined(__linux__)
+        sessionOptions = new Ort::SessionOptions();
+        sessionOptions->EnableMemPattern();
+        sessionOptions.SetExecutionMode(ExecutionMode::ORT_PARALLEL);
+
+        if (pipe.gpu) {
+            OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0);//NVIDIA
         }
 #endif
 
@@ -610,7 +628,7 @@ int PipeLine::load_face_model(PipelineConfig_t &cfg) {
         ortSession = nullptr;
     }
     fwprintf(stderr, L"Loading onnx model...\n");
-    ortSession = new Ort::Session(*env, path.c_str(), sessionOptions);
+    ortSession = new Ort::Session(*env, path.c_str(), *sessionOptions);
     fwprintf(stderr, L"Loading onnx model finished...\n");
 };
 
@@ -840,7 +858,7 @@ int PipeLine::load_color_model(PipelineConfig_t &cfg) {
         color = new ColorSiggraph(pipe.gpu);
 
         fprintf(stderr, "Loading colorization model...\n");
-        if (color->load(sessionOptions, pipe.colorize_m) == 0) {
+        if (color->load(*sessionOptions, pipe.colorize_m) == 0) {
             fprintf(stderr, "Loading colorization model finished...\n");
             return 1;
         } else {
