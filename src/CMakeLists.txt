@@ -19,6 +19,9 @@ endif()
 
 set(CMAKE_BUILD_TYPE Release)
 
+set(USE_CUDA 0)
+set(USE_DML 1)
+
 # -------------- Support C++17 for using filesystem  ------------------#
 # https://cmake.org/cmake/help/latest/prop_tgt/CXX_STANDARD.html
 set(CMAKE_CXX_STANDARD 20)
@@ -235,6 +238,24 @@ add_custom_target(generate-spirv DEPENDS ${SHADER_SPV_HEX_FILES})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if(WIN32)
+if(USE_CUDA EQUAL 1) 
+# -----------------------------------------------------------------------------
+# onnxruntime NVIDIA CUDA and TensorRT
+# -----------------------------------------------------------------------------
+FetchContent_Declare(
+    ort
+    URL https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Windows/1.22.0
+)
+
+FetchContent_MakeAvailable(ort)
+
+set(ort_bin_dir "${ort_SOURCE_DIR}/runtimes/win-${TARGET_ARCH}/native")
+
+add_library(ort INTERFACE)
+target_include_directories(ort INTERFACE "${ort_SOURCE_DIR}/build/native/include")
+target_link_libraries(ort INTERFACE "${ort_bin_dir}/onnxruntime.lib")
+endif()
+if (USE_DML EQUAL 1)
 # -----------------------------------------------------------------------------
 # onnxruntime
 # -----------------------------------------------------------------------------
@@ -283,13 +304,14 @@ set(dml_bin_dir "${dml_SOURCE_DIR}/bin/${TARGET_ARCH}-win")
 add_library(dml INTERFACE)
 target_include_directories(dml INTERFACE "${dml_SOURCE_DIR}/include")
 target_link_libraries(dml INTERFACE "${dml_bin_dir}/directml.lib")
+endif()
 elseif(LINUX)
 # -----------------------------------------------------------------------------
 # onnxruntime
 # -----------------------------------------------------------------------------
 FetchContent_Declare(
     ort
-    URL https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu/1.16.3
+    URL https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Linux/1.22.0
 )
 
 FetchContent_MakeAvailable(ort)
@@ -299,26 +321,9 @@ set(ort_bin_dir "${ort_SOURCE_DIR}/runtimes/linux-${TARGET_ARCH}/native")
 add_library(ort INTERFACE)
 target_include_directories(ort INTERFACE "${ort_SOURCE_DIR}/build/native/include")
 target_link_libraries(ort INTERFACE "${ort_bin_dir}/onnxruntime.lib")
-elseif(APPLE)
-# -----------------------------------------------------------------------------
-# onnxruntime
-# -----------------------------------------------------------------------------
-FetchContent_Declare(
-    ort
-    URL https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu/1.20.1
-)
-
-FetchContent_MakeAvailable(ort)
-
-set(ort_bin_dir "${ort_SOURCE_DIR}/runtimes/osx-${TARGET_ARCH}/native")
-
-add_library(ort INTERFACE)
-target_include_directories(ort INTERFACE "${ort_SOURCE_DIR}/build/native/include")
-target_link_libraries(ort INTERFACE "${ort_bin_dir}/onnxruntime.lib")
-
 endif()
 
-add_executable(${CMAKE_PROJECT_NAME} main.cpp gfpgan.cpp Faceyolov7_lite_e.cpp ColorSiggraph.cpp Faceyolov5bl.cpp retinaface.cpp helpers.cpp generator.cpp encoder.cpp codeformer.cpp pipeline.cpp realesrgan.cpp)
+add_library(${CMAKE_PROJECT_NAME} SHARED main.cpp gfpgan.cpp Faceyolov7_lite_e.cpp ColorSiggraph.cpp Faceyolov5bl.cpp retinaface.cpp helpers.cpp generator.cpp encoder.cpp codeformer.cpp pipeline.cpp realesrgan.cpp)
 add_dependencies(${CMAKE_PROJECT_NAME} generate-spirv)
 if(USE_STATIC_MOLTENVK)
     find_library(CoreFoundation NAMES CoreFoundation)
@@ -342,10 +347,19 @@ if(USE_STATIC_MOLTENVK)
     )
 endif()
 
+if (USE_CUDA EQUAL 1)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PUBLIC USE_CD)
+endif()
+if (USE_DML EQUAL 1)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PUBLIC USE_DM)
+endif()
+
 if(WIN32)
+if (USE_DML EQUAL 1)
 target_link_libraries(${CMAKE_PROJECT_NAME} ${NCNN_GFPGAN_LINK_LIBRARIES} ${OpenCV_LIBS} ort dml d3d12 dxcore dxheaders)
-elseif(LINUX)
-target_link_libraries(${CMAKE_PROJECT_NAME} ${NCNN_GFPGAN_LINK_LIBRARIES} ${OpenCV_LIBS} ort)
 else()
+target_link_libraries(${CMAKE_PROJECT_NAME} ${NCNN_GFPGAN_LINK_LIBRARIES} ${OpenCV_LIBS} ort)
+endif()
+elseif(LINUX)
 target_link_libraries(${CMAKE_PROJECT_NAME} ${NCNN_GFPGAN_LINK_LIBRARIES} ${OpenCV_LIBS} ort)
 endif()
