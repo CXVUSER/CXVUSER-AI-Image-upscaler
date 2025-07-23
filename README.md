@@ -19,38 +19,6 @@ Platforms:
 6. GPEN
 7. Siggraph17, DDColor, Deoldify for colorize photo
 
-### Usage tips:
-```
-Usage: this_binary [options]...
-
- -i <img>      Path to input image
- -s <digit>    Model scale factor (default=autodetect)
- -j <digit>    Custom output scale factor
- -t <digit>    Tile size (default=auto)
- -f            Restore faces (default=CodeFormer)
- -m <string>   ESRGAN model name (default=./models/ESRGAN/4xNomos8kSC)
- -g <string>   GFPGAN model path (default=./models/face_restore/codeformer_0_1_0.onnx)
- -x <digit>    Face detection threshold (default=0.5, recommended range: 0.3-0.7)
- -c            Use CodeFormer face restore model (ncnn)
- -d            Switch face restore inference to ONNX (default=enabled)
- -w <digit>    CodeFormer Fidelity (Only ONNX, default=0.7)
- -u            Face upsample (after face restore)
- -z <string>   FaceUpsample model (ESRGAN)
- -p            Use face parsing for accurate face masking (default=false)
- -o <string>   Override image input path
- -l <string>   Face detector model (default=y7, options: y7, y5, (RetinaFace: rt, mnet))
- -h            Colorize grayscale photo with DeOldify Artistic
- -n            No upsample
- -a            Wait (pause execution)
- -v            Verbose mode (detailed logging)
-```
-
-### Sample:
-```Console
-background upsample by (4xNomos8kSC) and interpolate to 8x and face restored by codeformer(onnx) with fidelity 0,5 and upsample by high-fidelity-4x model
-gfpgan-ncnn-vulkan.exe -i .\avatar6827912_4.jpeg -v -m ./models/4xNomos8kSC -x 0,3 -c -d -w 0,5 -u -z ./models/high-fidelity-4x -j 8
-```
-
 ### Compile:
 ## Clone Project and Get Submodules
 
