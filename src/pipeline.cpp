@@ -323,7 +323,6 @@ cv::Mat image2tensor(const cv::Mat &inputImage) {
 };
 
 cv::Mat tensor2image(const float *outputData, const std::vector<int64_t> &outputShape) {
-    int N = static_cast<int>(outputShape[0]);
     int C = static_cast<int>(outputShape[1]);
     int H = static_cast<int>(outputShape[2]);
     int W = static_cast<int>(outputShape[3]);
