@@ -757,13 +757,19 @@ int PipeLine::setUseParse(PipelineConfig_t &cfg) {
 
         fwprintf(stderr, L"Loading face parsing model from %s...\n", model_bin.c_str());
 
-        FILE *f = _wfopen(model_param.c_str(), L"rb");
-        int ret_param = parsing_net->load_param(f);
-        fclose(f);
+        int ret_param{}, ret_bin{};
 
+        FILE *f = _wfopen(model_param.c_str(), L"rb");
+        if (f) {
+            ret_param = parsing_net->load_param(f);
+            fclose(f);
+            f = 0;
+        }
         f = _wfopen(model_bin.c_str(), L"rb");
-        int ret_bin = parsing_net->load_model(f);
-        fclose(f);
+        if (f) {
+            ret_bin = parsing_net->load_model(f);
+            fclose(f);
+        }
 
         if (!ret_param || !ret_bin) {
             fwprintf(stderr, L"Loading face parsing model finished...\n");
