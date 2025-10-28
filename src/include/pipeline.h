@@ -33,6 +33,7 @@ typedef struct _PipelineConfig {
     bool onnx = false;
     float prob_thr = 0.5f;
     float nms_thr = 0.65f;
+    float weight = 1.f;
     bool codeformer = false;
     bool useParse = false;
     int Colorize = false;
@@ -62,6 +63,7 @@ public:
     int setFaceDetectorThreshold(PipelineConfig_t & cfg);
     int setUseParse(PipelineConfig_t & cfg);
     int switchToNCNNFaceModels(PipelineConfig_t & cfg);
+    int setWeight(PipelineConfig_t & cfg);
     int load_color_model(PipelineConfig_t & cfg);
     int changeColorState(PipelineConfig_t & cfg);
     int setESRTTAand2x(PipelineConfig_t & cfg);
