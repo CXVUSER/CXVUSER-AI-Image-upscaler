@@ -240,6 +240,9 @@ void PipeLine::paste_faces_to_input_image(const cv::Mat &restored_face, cv::Mat 
     cv::Mat inv_soft_mask_f;
     inv_soft_mask_u.convertTo(inv_soft_mask_f, CV_32F, 1 / 255.f, 0.f);
 
+    if (pipe.weight < 1.f && pipe.weight > 0.f)
+        inv_soft_mask_f *= pipe.weight;
+
 #pragma omp parallel for
     for (int h = 0; h < bg_upsample.rows; ++h) {
         cv::Vec3b *img_ptr = bg_upsample.ptr<cv::Vec3b>(h);
@@ -895,3 +898,8 @@ int PipeLine::setESRTTAand2x(PipelineConfig_t &cfg) {
 std::vector<cv::Mat> &PipeLine::getCrops() {
     return crops;
 };
+
+int PipeLine::setWeight(PipelineConfig_t &cfg) {
+    pipe.weight = cfg.weight;
+    return 1;
+}
