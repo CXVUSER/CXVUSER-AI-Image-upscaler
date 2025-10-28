@@ -369,18 +369,15 @@ cv::Mat PipeLine::inferFaceModel(
     // For simplicity, this sample binds input/output buffers in system memory instead of DirectX resources.
     Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
-    //Fix for restoreformer
-    if (pipe.face_model.find(L"restoreformer", 0) != std::string::npos) {
-        if (0 > inputShape[0])
-            inputShape[0] = 1;//Override batch size
-
-        if (0 > outputShape[0])
-            outputShape[0] = 1;
-        if (0 > outputShape[2])
-            outputShape[2] = 512;
-        if (0 > outputShape[3])
-            outputShape[3] = 512;
-    }
+    // Override model characteristics
+    inputShape[0] = 1;
+    inputShape[1] = 3;
+    inputShape[2] = 512;
+    inputShape[3] = 512;
+    outputShape[0] = 1;
+    outputShape[1] = 3;
+    outputShape[2] = 512;
+    outputShape[3] = 512;
 
     auto imageTensor = Ort::Value::CreateTensor<float>(
             memoryInfo,
